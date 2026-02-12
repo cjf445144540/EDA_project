@@ -7,9 +7,7 @@
 - 未来可继续添加其他爬虫...
 """
 
-from stock_news_crawler import THSNewsCrawler
-from semitronix_news_crawler import SemitronixNewsCrawler
-from primarius_news_crawler import PrimariusNewsCrawler
+from crawlers import THSNewsCrawler, SemitronixNewsCrawler, PrimariusNewsCrawler, UnivistiaNewsCrawler, XepicNewsCrawler
 from classify_news import NewsClassifier
 from auto_news_writer import get_first_news_link, fetch_news_content, copy_to_clipboard
 import pyperclip
@@ -27,6 +25,8 @@ COMPANY_NAMES = {
     "301095": "广立微",
     "semitronix": "广立微",  # 广立微官网
     "primarius": "概伦电子",  # 概伦电子官网
+    "univista": "合见工软",  # 合见工软官网
+    "xepic": "芯华章",  # 芯华章官网
 }
 
 # ========================================
@@ -47,15 +47,29 @@ THS_CONFIG = {
 # 广立微官网新闻配置
 SEMITRONIX_CONFIG = {
     'enabled': True,  # 是否启用
-    'max_pages': 10,  # 最大爬取页数
-    'months': 3,      # 只保留最近几个月的新闻
+    'max_pages': 1,  # 最大爬取页数
+    'months': 1,      # 只保留最近几个月的新闻
 }
 
 # 概伦电子官网新闻配置
 PRIMARIUS_CONFIG = {
     'enabled': True,  # 是否启用
     'max_pages': 1,   # 最大爬取页数（只有1页）
-    'months': 3,      # 只保留最近几个月的新闻
+    'months': 1,      # 只保留最近几个月的新闻
+}
+
+# 合见工软官网新闻配置
+UNIVISTA_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': 1,   # 最大爬取页数
+    'months': 1,      # 只保留最近几个月的新闻
+}
+
+# 芯华章官网新闻配置
+XEPIC_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': 1,   # 最大爬取页数
+    'months': 1,      # 只保留最近几个月的新闻
 }
 
 # 未来可以继续添加其他爬虫配置...
@@ -108,12 +122,14 @@ def run_batch_crawl(stock_list, mode="today", start_date=None, end_date=None):
             print(f"❌ 股票 {code} 爬取失败: {e}")
     
     # 将汇总结果保存
-    output_file = "batch_news_results.json"
+    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')
+    os.makedirs(output_dir, exist_ok=True)
+    output_file = os.path.join(output_dir, "batch_news_results.json")
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(all_results, f, ensure_ascii=False, indent=2)
     
     print(f"\n" + "="*50)
-    print(f"抓取任务结束！汇总数据已保存至: {os.path.abspath(output_file)}")
+    print(f"抓取任务结束！汇总数据已保存至: {output_file}")
     print("="*50)
     
     return all_results
@@ -217,6 +233,68 @@ def run_primarius_crawler(config):
         return {}
 
 
+def run_univista_crawler(config):
+    """运行合见工软官网新闻爬虫"""
+    if not config.get('enabled', False):
+        return {}
+    
+    print("\n" + "="*50)
+    print("合见工软官网新闻爬虫")
+    print("="*50)
+    
+    max_pages = config.get('max_pages', 5)
+    months = config.get('months', 3)
+    
+    try:
+        crawler = UnivistiaNewsCrawler()
+        news_list = crawler.crawl(max_pages=max_pages, months=months)
+        
+        # 返回统一格式
+        result = {
+            "univista": {
+                "source": "合见工软官网",
+                "count": len(news_list),
+                "news": news_list
+            }
+        }
+        print(f"✅ 合见工软官网爬取完成，获取 {len(news_list)} 条新闻（最近{months}个月）")
+        return result
+    except Exception as e:
+        print(f"❌ 合见工软官网爬取失败: {e}")
+        return {}
+
+
+def run_xepic_crawler(config):
+    """运行芯华章官网新闻爬虫"""
+    if not config.get('enabled', False):
+        return {}
+    
+    print("\n" + "="*50)
+    print("芯华章官网新闻爬虫")
+    print("="*50)
+    
+    max_pages = config.get('max_pages', 5)
+    months = config.get('months', 3)
+    
+    try:
+        crawler = XepicNewsCrawler()
+        news_list = crawler.crawl(max_pages=max_pages, months=months)
+        
+        # 返回统一格式
+        result = {
+            "xepic": {
+                "source": "芯华章官网",
+                "count": len(news_list),
+                "news": news_list
+            }
+        }
+        print(f"✅ 芯华章官网爬取完成，获取 {len(news_list)} 条新闻（最近{months}个月）")
+        return result
+    except Exception as e:
+        print(f"❌ 芯华章官网爬取失败: {e}")
+        return {}
+
+
 def convert_to_new_format(raw_results):
     """
     将爬取结果转换为新格式：
@@ -267,7 +345,15 @@ def main():
     primarius_results = run_primarius_crawler(PRIMARIUS_CONFIG)
     all_results.update(primarius_results)
     
-    # ======== 4. 未来可以继续添加其他爬虫 ========
+    # ======== 4. 运行合见工软官网爬虫 ========
+    univista_results = run_univista_crawler(UNIVISTA_CONFIG)
+    all_results.update(univista_results)
+    
+    # ======== 5. 运行芯华章官网爬虫 ========
+    xepic_results = run_xepic_crawler(XEPIC_CONFIG)
+    all_results.update(xepic_results)
+    
+    # ======== 6. 未来可以继续添加其他爬虫 ========
     # other_results = run_other_crawler(OTHER_CONFIG)
     # all_results.update(other_results)
     
@@ -276,12 +362,14 @@ def main():
         # 转换为新格式：公司名称 -> 来源 -> 新闻列表
         formatted_results = convert_to_new_format(all_results)
         
-        output_file = "batch_news_results.json"
+        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')
+        os.makedirs(output_dir, exist_ok=True)
+        output_file = os.path.join(output_dir, "batch_news_results.json")
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(formatted_results, f, ensure_ascii=False, indent=2)
         
         print("\n" + "="*50)
-        print(f"所有爬虫任务完成！汇总数据已保存至: {os.path.abspath(output_file)}")
+        print(f"所有爬虫任务完成！汇总数据已保存至: {output_file}")
         print("="*50)
         
         # 统计汇总
@@ -305,12 +393,11 @@ def main():
         # 创建分类器
         classifier = NewsClassifier()
         target_categories = ["战略合作", "技术研发", "行业分析"]
-        skip_sources = ["广立微官网"]  # 这些来源不做分类筛选
-        category_only_sources = ["概伦电子官网"]  # 这些来源只做分类筛选，不限公司相关
+        skip_sources = []  # 不跳过任何来源
+        category_only_sources = ["广立微官网", "概伦电子官网", "合见工软官网", "芯华章官网"]  # 公司官网只做分类筛选，不限公司相关
         
         print(f"过滤规则: 同花顺新闻筛选 {', '.join(target_categories)} 三类 + 公司直接相关")
-        print(f"         广立微官网新闻不做标题筛选")
-        print(f"         概伦电子官网新闻筛选 {', '.join(target_categories)} 三类（不限公司相关）\n")
+        print(f"         公司官网新闻筛选 {', '.join(target_categories)} 三类（不限公司相关）\n")
         
         # 执行分类（两层筛选）- 使用转换后的格式
         classified_results = classifier.classify_batch(
@@ -363,6 +450,9 @@ def main():
         temp_index = 1
         news_by_company = {}  # {公司名: {来源: [(news, content, content_len)]}}
         
+        # 创建芯华章爬虫实例用于获取内容
+        xepic_crawler = XepicNewsCrawler()
+        
         for company_name, sources in classified_results.items():
             news_by_company[company_name] = {}
             for source_name, news_list in sources.items():
@@ -370,7 +460,13 @@ def main():
                 for news in news_list:
                     # 获取新闻内容并判断字数
                     print(f"  正在检查第 {temp_index} 条新闻...", end="\r")
-                    content = fetch_news_content(news['link'])
+                    
+                    # 芯华章官网使用专用爬虫获取内容
+                    if source_name == "芯华章官网":
+                        content = xepic_crawler.fetch_news_content(news['link'])
+                    else:
+                        content = fetch_news_content(news['link'])
+                    
                     content_len = len(content) if content else 0
                     temp_index += 1
                     

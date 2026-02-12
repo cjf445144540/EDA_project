@@ -28,11 +28,11 @@ class PrimariusNewsCrawler:
             'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
         }
     
-    def crawl(self, max_pages=1, months=3):
+    def crawl(self, max_pages=1, months=1):
         """
         爬取新闻列表
         :param max_pages: 最大爬取页数，默认1页
-        :param months: 只保留最近几个月的新闻，默认3个月
+        :param months: 只保留最近几个月的新闻，默认1个月
         :return: 新闻列表
         """
         all_news = []
@@ -205,7 +205,10 @@ class PrimariusNewsCrawler:
     
     def save_to_json(self, news_list, filename='primarius_news.json'):
         """保存新闻到 JSON 文件（三级嵌套格式）"""
-        filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
+        # 输出到 output 目录
+        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'output')
+        os.makedirs(output_dir, exist_ok=True)
+        filepath = os.path.join(output_dir, filename)
         
         # 三级嵌套格式：公司名称 -> 来源 -> 新闻列表
         data = {
@@ -236,8 +239,8 @@ def main():
     
     crawler = PrimariusNewsCrawler()
     
-    # 爬取新闻（默认爬取1页，最近3个月）
-    news_list = crawler.crawl(max_pages=1, months=3)
+    # 爬取新闻(默认爬取1页,最近1个月)
+    news_list = crawler.crawl(max_pages=1, months=1)
     
     if news_list:
         # 显示部分结果

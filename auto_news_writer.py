@@ -229,7 +229,7 @@ def copy_to_clipboard(content, title, source=""):
 请生成一篇专业的新闻稿，要求：
 1. 标题吸引人
 2. 通过网络搜索补充更多信息
-3. 字数约1000字"""
+3. 字数约800字"""
     
     # 如果是官网来源，添加去除主观描述的要求
     if is_official_site:
@@ -240,7 +240,7 @@ def copy_to_clipboard(content, title, source=""):
     else:
         # 非官网来源，添加扩充/缩减字数的要求
         prompt += """
-4. 如果原文超过1000字，则提取关键内容进行适当精简"""
+4. 如果原文超过800字，则提取关键内容进行适当精简"""
     
     # 复制到剪贴板
     pyperclip.copy(prompt)
