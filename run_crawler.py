@@ -7,7 +7,7 @@
 - 未来可继续添加其他爬虫...
 """
 
-from crawlers import THSNewsCrawler, SemitronixNewsCrawler, PrimariusNewsCrawler, UnivistiaNewsCrawler, XepicNewsCrawler
+from crawlers import THSNewsCrawler, SemitronixNewsCrawler, PrimariusNewsCrawler, UnivistiaNewsCrawler, XepicNewsCrawler, SeccwNewsCrawler, DramxNewsCrawler
 from classify_news import NewsClassifier
 from auto_news_writer import get_first_news_link, fetch_news_content, copy_to_clipboard
 import pyperclip
@@ -27,6 +27,8 @@ COMPANY_NAMES = {
     "primarius": "概伦电子",  # 概伦电子官网
     "univista": "合见工软",  # 合见工软官网
     "xepic": "芯华章",  # 芯华章官网
+    "seccw": "行业新闻",  # 深圳电子商会
+    "dramx": "行业新闻",  # 全球半导体观察
 }
 
 # ========================================
@@ -67,6 +69,21 @@ UNIVISTA_CONFIG = {
 
 # 芯华章官网新闻配置
 XEPIC_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': 1,   # 最大爬取页数
+    'months': 1,      # 只保留最近几个月的新闻
+}
+
+# 深圳电子商会新闻配置
+SECCW_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': 1,   # 最大爬取页数
+    'months': 1,      # 只保留最近几个月的新闻
+    'keyword': 'EDA', # 搜索关键词
+}
+
+# 全球半导体观察新闻配置
+DRAMX_CONFIG = {
     'enabled': True,  # 是否启用
     'max_pages': 1,   # 最大爬取页数
     'months': 1,      # 只保留最近几个月的新闻
@@ -295,6 +312,69 @@ def run_xepic_crawler(config):
         return {}
 
 
+def run_seccw_crawler(config):
+    """运行深圳电子商会新闻爬虫"""
+    if not config.get('enabled', False):
+        return {}
+    
+    print("\n" + "="*50)
+    print("深圳电子商会新闻爬虫 (EDA关键词)")
+    print("="*50)
+    
+    max_pages = config.get('max_pages', 5)
+    months = config.get('months', 3)
+    keyword = config.get('keyword', 'EDA')
+    
+    try:
+        crawler = SeccwNewsCrawler(keyword=keyword)
+        news_list = crawler.crawl(max_pages=max_pages, months=months)
+        
+        # 返回统一格式
+        result = {
+            "seccw": {
+                "source": "深圳电子商会",
+                "count": len(news_list),
+                "news": news_list
+            }
+        }
+        print(f"✅ 深圳电子商会爬取完成，获取 {len(news_list)} 条新闻（最近{months}个月）")
+        return result
+    except Exception as e:
+        print(f"❌ 深圳电子商会爬取失败: {e}")
+        return {}
+
+
+def run_dramx_crawler(config):
+    """运行全球半导体观察新闻爬虫"""
+    if not config.get('enabled', False):
+        return {}
+    
+    print("\n" + "="*50)
+    print("全球半导体观察新闻爬虫 (EDA)")
+    print("="*50)
+    
+    max_pages = config.get('max_pages', 1)
+    months = config.get('months', 1)
+    
+    try:
+        crawler = DramxNewsCrawler()
+        news_list = crawler.crawl(max_pages=max_pages, months=months)
+        
+        # 返回统一格式
+        result = {
+            "dramx": {
+                "source": "全球半导体观察",
+                "count": len(news_list),
+                "news": news_list
+            }
+        }
+        print(f"✅ 全球半导体观察爬取完成，获取 {len(news_list)} 条新闻（最近{months}个月）")
+        return result
+    except Exception as e:
+        print(f"❌ 全球半导体观察爬取失败: {e}")
+        return {}
+
+
 def convert_to_new_format(raw_results):
     """
     将爬取结果转换为新格式：
@@ -353,7 +433,15 @@ def main():
     xepic_results = run_xepic_crawler(XEPIC_CONFIG)
     all_results.update(xepic_results)
     
-    # ======== 6. 未来可以继续添加其他爬虫 ========
+    # ======== 6. 运行深圳电子商会爬虫 ========
+    seccw_results = run_seccw_crawler(SECCW_CONFIG)
+    all_results.update(seccw_results)
+    
+    # ======== 7. 运行全球半导体观察爬虫 ========
+    dramx_results = run_dramx_crawler(DRAMX_CONFIG)
+    all_results.update(dramx_results)
+    
+    # ======== 8. 未来可以继续添加其他爬虫 ========
     # other_results = run_other_crawler(OTHER_CONFIG)
     # all_results.update(other_results)
     
@@ -394,7 +482,7 @@ def main():
         classifier = NewsClassifier()
         target_categories = ["战略合作", "技术研发", "行业分析"]
         skip_sources = []  # 不跳过任何来源
-        category_only_sources = ["广立微官网", "概伦电子官网", "合见工软官网", "芯华章官网"]  # 公司官网只做分类筛选，不限公司相关
+        category_only_sources = ["广立微官网", "概伦电子官网", "合见工软官网", "芯华章官网", "深圳电子商会", "全球半导体观察"]  # 公司官网和行业新闻只做分类筛选，不限公司相关
         
         print(f"过滤规则: 同花顺新闻筛选 {', '.join(target_categories)} 三类 + 公司直接相关")
         print(f"         公司官网新闻筛选 {', '.join(target_categories)} 三类（不限公司相关）\n")
@@ -452,6 +540,10 @@ def main():
         
         # 创建芯华章爬虫实例用于获取内容
         xepic_crawler = XepicNewsCrawler()
+        # 创建深圳电子商会爬虫实例用于获取内容
+        seccw_crawler = SeccwNewsCrawler()
+        # 创建全球半导体观察爬虫实例用于获取内容
+        dramx_crawler = DramxNewsCrawler()
         
         for company_name, sources in classified_results.items():
             news_by_company[company_name] = {}
@@ -464,6 +556,10 @@ def main():
                     # 芯华章官网使用专用爬虫获取内容
                     if source_name == "芯华章官网":
                         content = xepic_crawler.fetch_news_content(news['link'])
+                    elif source_name == "深圳电子商会":
+                        content = seccw_crawler.fetch_news_content(news['link'])
+                    elif source_name == "全球半导体观察":
+                        content = dramx_crawler.fetch_news_content(news['link'])
                     else:
                         content = fetch_news_content(news['link'])
                     

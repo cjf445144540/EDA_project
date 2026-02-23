@@ -9,6 +9,8 @@ from .semitronix_news_crawler import SemitronixNewsCrawler
 from .primarius_news_crawler import PrimariusNewsCrawler
 from .univista_news_crawler import UnivistiaNewsCrawler
 from .xepic_news_crawler import XepicNewsCrawler
+from .seccw_news_crawler import SeccwNewsCrawler
+from .dramx_news_crawler import DramxNewsCrawler
 
 __all__ = [
     'THSNewsCrawler',
@@ -16,4 +18,6 @@ __all__ = [
     'PrimariusNewsCrawler',
     'UnivistiaNewsCrawler',
     'XepicNewsCrawler',
+    'SeccwNewsCrawler',
+    'DramxNewsCrawler',
 ]
