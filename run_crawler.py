@@ -139,7 +139,7 @@ def run_batch_crawl(stock_list, mode="today", start_date=None, end_date=None):
             print(f"❌ 股票 {code} 爬取失败: {e}")
     
     # 将汇总结果保存
-    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')
+    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'json')
     os.makedirs(output_dir, exist_ok=True)
     output_file = os.path.join(output_dir, "batch_news_results.json")
     with open(output_file, 'w', encoding='utf-8') as f:
@@ -176,6 +176,9 @@ def run_ths_crawler(config):
             crawler = THSNewsCrawler(code)
             news_list = crawler.crawl(start_date=start_date, end_date=end_date)
             
+            # 保存单独的 JSON 文件
+            crawler.save_to_json(news_list)
+            
             all_results[code] = {
                 "source": "同花顺",
                 "count": len(news_list),
@@ -203,6 +206,9 @@ def run_semitronix_crawler(config):
     try:
         crawler = SemitronixNewsCrawler()
         news_list = crawler.crawl(max_pages=max_pages, months=months)
+        
+        # 保存单独的 JSON 文件
+        crawler.save_to_json(news_list)
         
         # 返回统一格式
         result = {
@@ -235,6 +241,9 @@ def run_primarius_crawler(config):
         crawler = PrimariusNewsCrawler()
         news_list = crawler.crawl(max_pages=max_pages, months=months)
         
+        # 保存单独的 JSON 文件
+        crawler.save_to_json(news_list)
+        
         # 返回统一格式
         result = {
             "primarius": {
@@ -266,6 +275,9 @@ def run_univista_crawler(config):
         crawler = UnivistiaNewsCrawler()
         news_list = crawler.crawl(max_pages=max_pages, months=months)
         
+        # 保存单独的 JSON 文件
+        crawler.save_to_json(news_list)
+        
         # 返回统一格式
         result = {
             "univista": {
@@ -296,6 +308,9 @@ def run_xepic_crawler(config):
     try:
         crawler = XepicNewsCrawler()
         news_list = crawler.crawl(max_pages=max_pages, months=months)
+        
+        # 保存单独的 JSON 文件
+        crawler.save_to_json(news_list)
         
         # 返回统一格式
         result = {
@@ -329,6 +344,9 @@ def run_seccw_crawler(config):
         crawler = SeccwNewsCrawler(keyword=keyword)
         news_list = crawler.crawl(max_pages=max_pages, months=months)
         
+        # 保存单独的 JSON 文件
+        crawler.save_to_json(news_list)
+        
         # 返回统一格式
         result = {
             "seccw": {
@@ -359,6 +377,9 @@ def run_dramx_crawler(config):
     try:
         crawler = DramxNewsCrawler()
         news_list = crawler.crawl(max_pages=max_pages, months=months)
+        
+        # 保存单独的 JSON 文件
+        crawler.save_to_json(news_list)
         
         # 返回统一格式
         result = {
@@ -411,6 +432,27 @@ def main():
     print("#" + " "*20 + "统一新闻爬取系统" + " "*19 + "#")
     print("#"*60)
     
+    # ======== 清理旧的输出文件 ========
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    json_dir = os.path.join(base_dir, 'json')
+    result_dir = os.path.join(base_dir, 'result')
+    
+    # 清理 json 目录
+    if os.path.exists(json_dir):
+        for filename in os.listdir(json_dir):
+            filepath = os.path.join(json_dir, filename)
+            if os.path.isfile(filepath):
+                os.remove(filepath)
+        print("✅ 已清理 json 目录下的旧文件")
+    
+    # 清理 result 目录
+    if os.path.exists(result_dir):
+        for filename in os.listdir(result_dir):
+            filepath = os.path.join(result_dir, filename)
+            if os.path.isfile(filepath):
+                os.remove(filepath)
+        print("✅ 已清理 result 目录下的旧文件")
+    
     all_results = {}
     
     # ======== 1. 运行同花顺爬虫 ========
@@ -450,7 +492,7 @@ def main():
         # 转换为新格式：公司名称 -> 来源 -> 新闻列表
         formatted_results = convert_to_new_format(all_results)
         
-        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')
+        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'json')
         os.makedirs(output_dir, exist_ok=True)
         output_file = os.path.join(output_dir, "batch_news_results.json")
         with open(output_file, 'w', encoding='utf-8') as f:
@@ -495,6 +537,13 @@ def main():
             skip_filter_sources=skip_sources,
             category_only_sources=category_only_sources
         )
+        
+        # 按日期排序（最新的优先）
+        for company_name in classified_results:
+            for source_name in classified_results[company_name]:
+                classified_results[company_name][source_name].sort(
+                    key=lambda x: x.get('date', ''), reverse=True
+                )
         
         # 保存分类结果
         classifier.save_classified_results(classified_results)
@@ -579,12 +628,36 @@ def main():
         # 清除检查进度提示
         print(" " * 60, end="\r")
         
+        # 按日期排序（最新的优先）- 每个来源内部排序
+        for company_name in news_by_company:
+            for source_name in news_by_company[company_name]:
+                news_by_company[company_name][source_name].sort(
+                    key=lambda x: x['news'].get('date', ''), reverse=True
+                )
+        
+        # 获取每个公司的最新日期，用于公司排序
+        def get_company_latest_date(company_sources):
+            latest = ''
+            for news_items in company_sources.values():
+                for item in news_items:
+                    date = item['news'].get('date', '')
+                    if date > latest:
+                        latest = date
+            return latest
+        
+        # 按公司最新日期排序
+        sorted_companies = sorted(
+            news_by_company.items(),
+            key=lambda x: get_company_latest_date(x[1]),
+            reverse=True
+        )
+        
         # 树状结构显示
         print("\n" + "="*60)
-        print("可选新闻列表（树状结构）")
+        print("可选新闻列表（树状结构）- 按日期排序，最新优先")
         print("="*60)
         
-        for company_name, sources in news_by_company.items():
+        for company_name, sources in sorted_companies:
             # 统计该公司的新闻总数
             total_count = sum(len(items) for items in sources.values())
             if total_count == 0:
@@ -592,7 +665,17 @@ def main():
             
             print(f"\n📁 {company_name} ({total_count}条)")
             
-            source_list = list(sources.items())
+            # 来源按最新日期排序
+            def get_source_latest_date(news_items):
+                if not news_items:
+                    return ''
+                return max(item['news'].get('date', '') for item in news_items)
+            
+            source_list = sorted(
+                sources.items(),
+                key=lambda x: get_source_latest_date(x[1]),
+                reverse=True
+            )
             for source_idx, (source_name, news_items) in enumerate(source_list):
                 if not news_items:
                     continue
@@ -702,6 +785,14 @@ def main():
         else:
             print(f"   （{content_len}字，来自 [{source_name}]，已添加扩充/缩减到800字的提示词）")
         print("="*60)
+        
+        # 保存提示词到 result 目录
+        result_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'result')
+        os.makedirs(result_dir, exist_ok=True)
+        prompt_file = os.path.join(result_dir, 'selected_news_prompt.txt')
+        with open(prompt_file, 'w', encoding='utf-8') as f:
+            f.write(prompt)
+        print(f"📄 提示词已保存到: {prompt_file}")
     else:
         print("\n⚠️  没有找到可用的新闻来生成新闻稿")
 if __name__ == "__main__":

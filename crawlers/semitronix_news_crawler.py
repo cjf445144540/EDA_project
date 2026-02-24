@@ -207,8 +207,8 @@ class SemitronixNewsCrawler:
     
     def save_to_json(self, news_list, filename='semitronix_news.json'):
         """保存新闻到 JSON 文件（三级嵌套格式）"""
-        # 输出到 output 目录
-        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'output')
+        # 输出到 json 目录
+        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'json')
         os.makedirs(output_dir, exist_ok=True)
         filepath = os.path.join(output_dir, filename)
         
@@ -241,8 +241,8 @@ def main():
     
     crawler = SemitronixNewsCrawler()
     
-    # 爬取新闻（默认爬取前3页）
-    news_list = crawler.crawl(max_pages=3)
+    # 爬取新闻（默认爬取前3页，最近1个月）
+    news_list = crawler.crawl(max_pages=3, months=1)
     
     if news_list:
         # 显示部分结果
@@ -254,11 +254,11 @@ def main():
             print(f"\n{i}. {news['title']}")
             print(f"   日期: {news['date']}")
             print(f"   链接: {news['link']}")
-        
-        # 保存到文件
-        crawler.save_to_json(news_list)
     else:
-        print("未获取到任何新闻")
+        print("\n未获取到任何新闻")
+    
+    # 无论是否有新闻都保存文件
+    crawler.save_to_json(news_list)
 
 
 if __name__ == "__main__":

@@ -37,5 +37,6 @@ ENV/
 Thumbs.db
 
 # Project specific
-output/
+json/
+result/
 .qoder/

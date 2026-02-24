@@ -143,8 +143,8 @@ class NewsClassifier:
         :param classified_data: 分类后的数据
         :param output_file: 输出文件名
         """
-        # 输出到 output 目录
-        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')
+        # 输出到 json 目录
+        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'json')
         os.makedirs(output_dir, exist_ok=True)
         filepath = os.path.join(output_dir, output_file)
         with open(filepath, 'w', encoding='utf-8') as f:
@@ -173,8 +173,8 @@ class NewsClassifier:
 def main():
     """主函数"""
     # 1. 读取爬取结果
-    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')
-    input_file = os.path.join(output_dir, "batch_news_results.json")
+    json_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'json')
+    input_file = os.path.join(json_dir, "batch_news_results.json")
     
     if not os.path.exists(input_file):
         print(f"错误: 找不到文件 {input_file}")

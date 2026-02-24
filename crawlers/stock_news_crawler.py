@@ -289,37 +289,92 @@ class THSNewsCrawler:
                 continue
         
         return filtered_news
+    
+    def save_to_json(self, news_list, filename=None):
+        """保存新闻到 JSON 文件（三级嵌套格式）"""
+        import os
+        
+        if filename is None:
+            filename = f'ths_{self.stock_code}_news.json'
+        
+        # 输出到 json 目录
+        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'json')
+        os.makedirs(output_dir, exist_ok=True)
+        filepath = os.path.join(output_dir, filename)
+        
+        # 股票代码对应的公司名称
+        stock_names = {
+            "301269": "华大九天",
+            "688206": "概伦电子",
+            "301095": "广立微",
+        }
+        company_name = stock_names.get(self.stock_code, self.stock_code)
+        
+        # 三级嵌套格式
+        data = {
+            company_name: {
+                "同花顺": [
+                    {
+                        'title': news.get('title', ''),
+                        'link': news.get('link', ''),
+                        'date': news.get('date', '')
+                    }
+                    for news in news_list
+                ]
+            }
+        }
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        
+        print(f"新闻已保存到: {filepath}")
+        return filepath
 
 
 def main():
-    """主函数"""
-    # 股票代码
-    stock_code = "301269"
+    """主函数 - 爬取所有股票的新闻"""
+    # 股票代码列表
+    stock_codes = ["301269", "688206", "301095"]  # 华大九天、概伦电子、广立微
+    stock_names = {
+        "301269": "华大九天",
+        "688206": "概伦电子",
+        "301095": "广立微",
+    }
     
-    # 创建爬虫实例
-    crawler = THSNewsCrawler(stock_code)
+    all_results = {}
     
-    # 执行爬取 (只获取当天)
-    news_list = crawler.crawl(only_today=True)
+    for stock_code in stock_codes:
+        company_name = stock_names.get(stock_code, stock_code)
+        print("\n" + "=" * 60)
+        print(f"正在爬取 {company_name}({stock_code}) 的新闻...")
+        print("=" * 60)
+        
+        # 创建爬虫实例
+        crawler = THSNewsCrawler(stock_code)
+        
+        # 执行爬取 (只获取当天)
+        news_list = crawler.crawl(only_today=True)
+        
+        # 打印结果
+        print(f"\n{company_name} 新闻列表:")
+        for i, news in enumerate(news_list, 1):
+            print(f"  {i}. {news['title']}")
+            if news['date']:
+                print(f"     日期: {news['date']}")
+        
+        if not news_list:
+            print("  (当天无新闻)")
+        
+        # 保存到单独的文件
+        crawler.save_to_json(news_list)
+        
+        all_results[stock_code] = news_list
     
-    # 打印结果
     print("\n" + "=" * 60)
-    print(f"股票 {stock_code} 新闻列表:")
+    print("所有股票爬取完成！")
     print("=" * 60)
     
-    for i, news in enumerate(news_list, 1):
-        print(f"\n{i}. {news['title']}")
-        print(f"   链接: {news['link']}")
-        if news['date']:
-            print(f"   日期: {news['date']}")
-    
-    # 保存到文件
-    output_file = f"news_{stock_code}.json"
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(news_list, f, ensure_ascii=False, indent=2)
-    print(f"\n新闻数据已保存到 {output_file}")
-    
-    return news_list
+    return all_results
 
 
 if __name__ == "__main__":
