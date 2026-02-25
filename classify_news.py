@@ -65,7 +65,7 @@ class NewsClassifier:
         # 如果没有匹配到任何分类，归为"其他新闻"
         return "其他新闻"
     
-    def classify_batch(self, news_data, filter_categories=None, only_company_related=False, skip_filter_sources=None, category_only_sources=None):
+    def classify_batch(self, news_data, filter_categories=None, only_company_related=False, skip_filter_sources=None, category_only_sources=None, company_only_sources=None):
         """
         批量分类新闻
         :param news_data: 新格式：公司名称 -> 来源 -> 新闻列表
@@ -73,11 +73,13 @@ class NewsClassifier:
         :param only_company_related: 是否只保留公司直接相关的新闻
         :param skip_filter_sources: 跳过分类筛选的来源列表，这些来源的新闻直接保留
         :param category_only_sources: 只做分类筛选的来源列表，不限公司相关
+        :param company_only_sources: 只做公司相关筛选的来源列表，不做分类筛选
         :return: 三级嵌套格式：公司名称 -> 来源 -> 新闻列表
         """
         classified_results = {}
         skip_sources = skip_filter_sources or []
         category_only = category_only_sources or []
+        company_only = company_only_sources or []
         
         for company_name, sources in news_data.items():
             # 按来源分组的结果
@@ -108,8 +110,12 @@ class NewsClassifier:
                     # 判断是否符合筛选条件
                     should_include = False
                     
+                    # 如果是只做公司相关筛选的来源（不做分类筛选）
+                    if source_name in company_only:
+                        if is_company:
+                            should_include = True
                     # 如果是只做分类筛选的来源
-                    if source_name in category_only:
+                    elif source_name in category_only:
                         if filter_categories is None or category in filter_categories:
                             should_include = True
                     # 如果要求公司直接相关
@@ -132,10 +138,10 @@ class NewsClassifier:
         return classified_results
     
     def _check_company_in_title(self, title, company_name):
-        """检查标题中是否包含公司名称"""
+        """检查标题中是否包含公司名称（不区分大小写）"""
         if not title or not company_name:
             return False
-        return company_name in title
+        return company_name.lower() in title.lower()
     
     def save_classified_results(self, classified_data, output_file="classified_news.json"):
         """

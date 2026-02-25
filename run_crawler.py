@@ -7,7 +7,7 @@
 - 未来可继续添加其他爬虫...
 """
 
-from crawlers import THSNewsCrawler, SemitronixNewsCrawler, PrimariusNewsCrawler, UnivistiaNewsCrawler, XepicNewsCrawler, SeccwNewsCrawler, DramxNewsCrawler
+from crawlers import THSNewsCrawler, SemitronixNewsCrawler, PrimariusNewsCrawler, UnivistiaNewsCrawler, XepicNewsCrawler, SeccwNewsCrawler, DramxNewsCrawler, SynopsysNewsCrawler, CadenceNewsCrawler, SiemensNewsCrawler
 from classify_news import NewsClassifier
 from auto_news_writer import get_first_news_link, fetch_news_content, copy_to_clipboard
 import pyperclip
@@ -29,6 +29,11 @@ COMPANY_NAMES = {
     "xepic": "芯华章",  # 芯华章官网
     "seccw": "行业新闻",  # 深圳电子商会
     "dramx": "行业新闻",  # 全球半导体观察
+    "synopsys": "Synopsys",  # Synopsys 新闻
+    "cadence_semiwiki": "Cadence",  # Cadence SemiWiki
+    "cadence_design_reuse": "Cadence",  # Cadence Design-Reuse
+    "siemens_semiwiki": "Siemens",  # Siemens SemiWiki
+    "siemens_design_reuse": "Siemens",  # Siemens Design-Reuse
 }
 
 # ========================================
@@ -87,6 +92,27 @@ DRAMX_CONFIG = {
     'enabled': True,  # 是否启用
     'max_pages': 1,   # 最大爬取页数
     'months': 1,      # 只保留最近几个月的新闻
+}
+
+# Synopsys 新闻配置
+SYNOPSYS_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': 1,   # 每个来源最大爬取页数
+    'days': 7,        # 只保留最近几天的新闻
+}
+
+# Cadence 新闻配置
+CADENCE_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': 1,   # 每个来源最大爬取页数
+    'days': 7,        # 只保留最近几天的新闻
+}
+
+# Siemens 新闻配置
+SIEMENS_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': 1,   # 每个来源最大爬取页数
+    'days': 7,        # 只保留最近几天的新闻
 }
 
 # 未来可以继续添加其他爬虫配置...
@@ -396,6 +422,137 @@ def run_dramx_crawler(config):
         return {}
 
 
+def run_synopsys_crawler(config):
+    """运行 Synopsys 新闻爬虫"""
+    if not config.get('enabled', False):
+        return {}
+    
+    print("\n" + "="*50)
+    print("Synopsys 新闻爬虫 (SemiWiki/Design-Reuse/官网)")
+    print("="*50)
+    
+    max_pages = config.get('max_pages', 1)
+    days = config.get('days', 7)
+    months = config.get('months', None)
+    
+    # days 优先，否则用 months 换算
+    if months is not None and 'days' not in config:
+        days = months * 30
+    
+    try:
+        crawler = SynopsysNewsCrawler()
+        news_list = crawler.crawl(max_pages=max_pages, days=days)
+        
+        # 保存单独的 JSON 文件
+        crawler.save_to_json(news_list)
+        
+        # 返回统一格式 - 按来源分组
+        result = {}
+        for news in news_list:
+            source = news.get('source', 'Synopsys')
+            key = f"synopsys_{source.lower().replace('-', '_').replace(' ', '_')}"
+            if key not in result:
+                result[key] = {
+                    "source": source,
+                    "count": 0,
+                    "news": []
+                }
+            result[key]["news"].append(news)
+            result[key]["count"] = len(result[key]["news"])
+        
+        print(f"✅ Synopsys 爬取完成，获取 {len(news_list)} 条新闻（最近{days}天）")
+        return result
+    except Exception as e:
+        print(f"❌ Synopsys 爬取失败: {e}")
+        return {}
+
+
+def run_cadence_crawler(config):
+    """运行 Cadence 新闻爬虫"""
+    if not config.get('enabled', False):
+        return {}
+
+    print("\n" + "="*50)
+    print("Cadence 新闻爬虫 (SemiWiki/Design-Reuse)")
+    print("="*50)
+
+    max_pages = config.get('max_pages', 1)
+    days = config.get('days', 7)
+    months = config.get('months', None)
+    if months is not None and 'days' not in config:
+        days = months * 30
+
+    try:
+        crawler = CadenceNewsCrawler()
+        news_list = crawler.crawl(max_pages=max_pages, days=days)
+
+        # 保存单独的 JSON 文件
+        crawler.save_to_json(news_list)
+
+        # 返回统一格式 - 按来源分组
+        result = {}
+        for news in news_list:
+            source = news.get('source', 'Cadence')
+            key = f"cadence_{source.lower().replace('-', '_').replace(' ', '_')}"
+            if key not in result:
+                result[key] = {
+                    "source": source,
+                    "count": 0,
+                    "news": []
+                }
+            result[key]["news"].append(news)
+            result[key]["count"] = len(result[key]["news"])
+
+        print(f"✅ Cadence 爬取完成，获取 {len(news_list)} 条新闻（最近{days}天）")
+        return result
+    except Exception as e:
+        print(f"❌ Cadence 爬取失败: {e}")
+        return {}
+
+
+def run_siemens_crawler(config):
+    """运行 Siemens 新闻爬虫"""
+    if not config.get('enabled', False):
+        return {}
+
+    print("\n" + "="*50)
+    print("Siemens EDA 新闻爬虫 (SemiWiki/Design-Reuse)")
+    print("="*50)
+
+    max_pages = config.get('max_pages', 1)
+    days = config.get('days', 7)
+    months = config.get('months', None)
+    if months is not None and 'days' not in config:
+        days = months * 30
+
+    try:
+        crawler = SiemensNewsCrawler()
+        news_list = crawler.crawl(max_pages=max_pages, days=days)
+
+        # 保存单独的 JSON 文件
+        crawler.save_to_json(news_list)
+
+        # 返回统一格式 - 按来源分组
+        result = {}
+        for news in news_list:
+            source = news.get('source', 'Siemens')
+            key = f"siemens_{source.lower().replace('-', '_').replace(' ', '_')}"
+            if key not in result:
+                result[key] = {
+                    "source": source,
+                    "count": 0,
+                    "news": []
+                }
+            result[key]["news"].append(news)
+            result[key]["count"] = len(result[key]["news"])
+
+        print(f"✅ Siemens 爬取完成，获取 {len(news_list)} 条新闻（最近{days}天）")
+        return result
+    except Exception as e:
+        print(f"❌ Siemens 爬取失败: {e}")
+        return {}
+
+
 def convert_to_new_format(raw_results):
     """
     将爬取结果转换为新格式：
@@ -404,7 +561,15 @@ def convert_to_new_format(raw_results):
     formatted = {}
     
     for key, data in raw_results.items():
-        company_name = COMPANY_NAMES.get(key, key)
+        # 处理 Synopsys/Cadence/Siemens 系列的 key
+        if key.startswith('synopsys_'):
+            company_name = "Synopsys"
+        elif key.startswith('cadence_'):
+            company_name = "Cadence"
+        elif key.startswith('siemens_'):
+            company_name = "Siemens"
+        else:
+            company_name = COMPANY_NAMES.get(key, key)
         source = data.get('source', '未知来源')
         news_list = data.get('news', [])
         
@@ -483,7 +648,19 @@ def main():
     dramx_results = run_dramx_crawler(DRAMX_CONFIG)
     all_results.update(dramx_results)
     
-    # ======== 8. 未来可以继续添加其他爬虫 ========
+    # ======== 8. 运行 Synopsys 爬虫 ========
+    synopsys_results = run_synopsys_crawler(SYNOPSYS_CONFIG)
+    all_results.update(synopsys_results)
+
+    # ======== 9. 运行 Cadence 爬虫 ========
+    cadence_results = run_cadence_crawler(CADENCE_CONFIG)
+    all_results.update(cadence_results)
+
+    # ======== 10. 运行 Siemens 爬虫 ========
+    siemens_results = run_siemens_crawler(SIEMENS_CONFIG)
+    all_results.update(siemens_results)
+
+    # ======== 11. 未来可以继续添加其他爬虫 ========
     # other_results = run_other_crawler(OTHER_CONFIG)
     # all_results.update(other_results)
     
@@ -525,9 +702,11 @@ def main():
         target_categories = ["战略合作", "技术研发", "行业分析"]
         skip_sources = []  # 不跳过任何来源
         category_only_sources = ["广立微官网", "概伦电子官网", "合见工软官网", "芯华章官网", "深圳电子商会", "全球半导体观察"]  # 公司官网和行业新闻只做分类筛选，不限公司相关
+        company_only_sources = ["SemiWiki", "Design-Reuse", "Synopsys官网", "Cadence官网", "Siemens官网"]  # 只做公司相关筛选，不做分类筛选
         
         print(f"过滤规则: 同花顺新闻筛选 {', '.join(target_categories)} 三类 + 公司直接相关")
-        print(f"         公司官网新闻筛选 {', '.join(target_categories)} 三类（不限公司相关）\n")
+        print(f"         公司官网/行业新闻筛选 {', '.join(target_categories)} 三类（不限公司相关）")
+        print(f"         Synopsys 新闻只筛选公司相关（不做分类筛选）\n")
         
         # 执行分类（两层筛选）- 使用转换后的格式
         classified_results = classifier.classify_batch(
@@ -535,7 +714,8 @@ def main():
             filter_categories=target_categories,
             only_company_related=True,
             skip_filter_sources=skip_sources,
-            category_only_sources=category_only_sources
+            category_only_sources=category_only_sources,
+            company_only_sources=company_only_sources
         )
         
         # 按日期排序（最新的优先）
@@ -580,50 +760,88 @@ def main():
     global_index = 1
         
     if classified_results:
-        print("\n正在检查新闻内容...")
+        print("\n正在检查新闻内容（并行获取中）...")
         print("-" * 60)
         
         # 先收集所有新闻及其内容
-        temp_index = 1
         news_by_company = {}  # {公司名: {来源: [(news, content, content_len)]}}
         
-        # 创建芯华章爬虫实例用于获取内容
+        # 创建爬虫实例用于获取内容
         xepic_crawler = XepicNewsCrawler()
-        # 创建深圳电子商会爬虫实例用于获取内容
         seccw_crawler = SeccwNewsCrawler()
-        # 创建全球半导体观察爬虫实例用于获取内容
         dramx_crawler = DramxNewsCrawler()
+        synopsys_crawler = SynopsysNewsCrawler()
+        cadence_crawler = CadenceNewsCrawler()
+        siemens_crawler = SiemensNewsCrawler()
         
+        # 收集所有需要获取内容的新闻
+        all_news_items = []
         for company_name, sources in classified_results.items():
-            news_by_company[company_name] = {}
             for source_name, news_list in sources.items():
-                news_by_company[company_name][source_name] = []
                 for news in news_list:
-                    # 获取新闻内容并判断字数
-                    print(f"  正在检查第 {temp_index} 条新闻...", end="\r")
-                    
-                    # 芯华章官网使用专用爬虫获取内容
-                    if source_name == "芯华章官网":
-                        content = xepic_crawler.fetch_news_content(news['link'])
-                    elif source_name == "深圳电子商会":
-                        content = seccw_crawler.fetch_news_content(news['link'])
-                    elif source_name == "全球半导体观察":
-                        content = dramx_crawler.fetch_news_content(news['link'])
-                    else:
-                        content = fetch_news_content(news['link'])
-                    
-                    content_len = len(content) if content else 0
-                    temp_index += 1
-                    
-                    # 过滤掉字数少于100的新闻
-                    if content_len < 100:
-                        continue
-                    
-                    news_by_company[company_name][source_name].append({
-                        'news': news,
-                        'content': content,
-                        'content_len': content_len
+                    all_news_items.append({
+                        'company': company_name,
+                        'source': source_name,
+                        'news': news
                     })
+        
+        # 定义获取单条新闻内容的函数
+        def fetch_single_news(item):
+            source_name = item['source']
+            news = item['news']
+            try:
+                if source_name == "芯华章官网":
+                    content = xepic_crawler.fetch_news_content(news['link'])
+                elif source_name == "深圳电子商会":
+                    content = seccw_crawler.fetch_news_content(news['link'])
+                elif source_name == "全球半导体观察":
+                    content = dramx_crawler.fetch_news_content(news['link'])
+                elif source_name in ["SemiWiki", "Design-Reuse", "Synopsys官网"]:
+                    content = synopsys_crawler.fetch_news_content(news['link'])
+                elif source_name == "Cadence官网":
+                    content = cadence_crawler.fetch_news_content(news['link'])
+                elif source_name == "Siemens官网":
+                    content = siemens_crawler.fetch_news_content(news['link'])
+                else:
+                    content = fetch_news_content(news['link'])
+                return {**item, 'content': content, 'content_len': len(content) if content else 0}
+            except Exception as e:
+                return {**item, 'content': None, 'content_len': 0}
+        
+        # 使用线程池并行获取
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        results = []
+        total = len(all_news_items)
+        completed = 0
+        
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = {executor.submit(fetch_single_news, item): item for item in all_news_items}
+            for future in as_completed(futures):
+                completed += 1
+                print(f"  正在检查新闻内容... ({completed}/{total})", end="\r")
+                results.append(future.result())
+        
+        # 整理结果到 news_by_company
+        for item in results:
+            company_name = item['company']
+            source_name = item['source']
+            content_len = item['content_len']
+            
+            # 过滤掉字数少于100的新闻
+            if content_len < 100:
+                continue
+            
+            if company_name not in news_by_company:
+                news_by_company[company_name] = {}
+            if source_name not in news_by_company[company_name]:
+                news_by_company[company_name][source_name] = []
+            
+            news_by_company[company_name][source_name].append({
+                'news': item['news'],
+                'content': item['content'],
+                'content_len': content_len
+            })
         
         # 清除检查进度提示
         print(" " * 60, end="\r")

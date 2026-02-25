@@ -11,13 +11,19 @@ from .univista_news_crawler import UnivistiaNewsCrawler
 from .xepic_news_crawler import XepicNewsCrawler
 from .seccw_news_crawler import SeccwNewsCrawler
 from .dramx_news_crawler import DramxNewsCrawler
+from .synopsys_news_crawler import SynopsysNewsCrawler
+from .cadence_news_crawler import CadenceNewsCrawler
+from .siemens_news_crawler import SiemensNewsCrawler
 
 __all__ = [
     'THSNewsCrawler',
-    'SemitronixNewsCrawler', 
+    'SemitronixNewsCrawler',
     'PrimariusNewsCrawler',
     'UnivistiaNewsCrawler',
     'XepicNewsCrawler',
     'SeccwNewsCrawler',
     'DramxNewsCrawler',
+    'SynopsysNewsCrawler',
+    'CadenceNewsCrawler',
+    'SiemensNewsCrawler',
 ]
