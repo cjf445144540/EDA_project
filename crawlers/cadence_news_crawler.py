@@ -285,6 +285,7 @@ class CadenceNewsCrawler:
                                     orig_resp = requests.get(read_more_link, headers=self.headers, timeout=15, verify=False)
                                     if orig_resp.status_code == 200:
                                         orig_soup = BeautifulSoup(orig_resp.text, 'html.parser')
+                                        orig_text = None
                                         for sel in ['.press-release-content', '.article-content', '.entry-content', '.post-content', '.content-body', 'article main', 'article']:
                                             orig_elem = orig_soup.select_one(sel)
                                             if orig_elem:
@@ -292,9 +293,19 @@ class CadenceNewsCrawler:
                                                     tag.decompose()
                                                 orig_paras = orig_elem.find_all('p')
                                                 orig_text = '\n'.join([p.get_text(strip=True) for p in orig_paras if p.get_text(strip=True)])
-                                                if orig_text and len(orig_text) > len(content):
-                                                    return orig_text
-                                                break
+                                                if orig_text and len(orig_text) > 100:
+                                                    break
+                                                orig_text = None
+                                        if not orig_text or len(orig_text) <= 100:
+                                            all_paras = orig_soup.find_all('p')
+                                            long_paras = [p.get_text(strip=True) for p in all_paras
+                                                         if len(p.get_text(strip=True)) > 80
+                                                         and 'read more' not in p.get_text(strip=True).lower()
+                                                         and 'click here' not in p.get_text(strip=True).lower()]
+                                            if long_paras:
+                                                orig_text = '\n'.join(long_paras)
+                                        if orig_text and len(orig_text) > len(content):
+                                            return orig_text
                                 except Exception:
                                     pass
                             if content and len(content) > 50:

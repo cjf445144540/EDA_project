@@ -215,6 +215,11 @@ def copy_to_clipboard(content, title, source=""):
     :param title: 新闻标题
     :param source: 新闻来源（如"同花顺"、"广立微官网"等）
     """
+    # 超过5000字时截断
+    MAX_CONTENT_LEN = 5000
+    if content and len(content) > MAX_CONTENT_LEN:
+        content = content[:MAX_CONTENT_LEN]
+
     # 判断是否是官网来源
     is_official_site = "官网" in source
     
