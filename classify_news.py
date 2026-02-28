@@ -190,12 +190,12 @@ def main():
     with open(input_file, 'r', encoding='utf-8') as f:
         news_data = json.load(f)
     
-    # 2. 创建分类器并执行分类（只保留指定的三类）
+    # 2. 创建分类器并执行分类（只保留指定的四类）
     classifier = NewsClassifier()
-    target_categories = ["战略合作", "技术研发", "行业分析"]
+    target_categories = ["财务相关", "战略合作", "技术研发", "行业分析"]
     classified_results = classifier.classify_batch(news_data, filter_categories=target_categories)
     
-    print(f"\n过滤规则: 只保留 {', '.join(target_categories)} 三类新闻")
+    print(f"\n过滤规则: 只保留 {', '.join(target_categories)} 四类新闻")
     
     # 3. 保存分类结果
     classifier.save_classified_results(classified_results)

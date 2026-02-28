@@ -7,7 +7,7 @@
 - 未来可继续添加其他爬虫...
 """
 
-from crawlers import THSNewsCrawler, SemitronixNewsCrawler, PrimariusNewsCrawler, UnivistiaNewsCrawler, XepicNewsCrawler, SeccwNewsCrawler, DramxNewsCrawler, SynopsysNewsCrawler, CadenceNewsCrawler, SiemensNewsCrawler
+from crawlers import THSNewsCrawler, SemitronixNewsCrawler, PrimariusNewsCrawler, UnivistiaNewsCrawler, XepicNewsCrawler, SeccwNewsCrawler, DramxNewsCrawler, SynopsysNewsCrawler, CadenceNewsCrawler, SiemensNewsCrawler, EETimesNewsCrawler
 from classify_news import NewsClassifier
 from auto_news_writer import get_first_news_link, fetch_news_content, copy_to_clipboard
 import pyperclip
@@ -34,6 +34,7 @@ COMPANY_NAMES = {
     "cadence_design_reuse": "Cadence",  # Cadence Design-Reuse
     "siemens_semiwiki": "Siemens",  # Siemens SemiWiki
     "siemens_design_reuse": "Siemens",  # Siemens Design-Reuse
+    "eetimes": "EETimes",  # EETimes
 }
 
 # ========================================
@@ -113,6 +114,14 @@ SIEMENS_CONFIG = {
     'enabled': True,  # 是否启用
     'max_pages': 1,   # 每个来源最大爬取页数
     'days': 7,        # 只保留最近几天的新闻
+}
+
+# EETimes 新闻配置
+EETIMES_CONFIG = {
+    'enabled': False,  # 暂时禁用（网站在当前网络环境下超时）
+    'max_pages': 1,   # 最大爬取页数
+    'days': 7,        # 只保留最近几天的新闻
+    'keyword': 'EDA', # 搜索关键词
 }
 
 # 未来可以继续添加其他爬虫配置...
@@ -553,6 +562,39 @@ def run_siemens_crawler(config):
         return {}
 
 
+def run_eetimes_crawler(config):
+    """运行 EETimes 新闻爬虫"""
+    if not config.get('enabled', False):
+        return {}
+
+    print("\n" + "="*50)
+    print("EETimes 新闻爬虫")
+    print("="*50)
+
+    max_pages = config.get('max_pages', 1)
+    days = config.get('days', 7)
+    keyword = config.get('keyword', 'EDA')
+
+    try:
+        crawler = EETimesNewsCrawler()
+        news_list = crawler.crawl(max_pages=max_pages, days=days, keyword=keyword)
+        crawler.save_to_json(news_list)
+
+        result = {}
+        if news_list:
+            result['eetimes'] = {
+                'source': 'EETimes',
+                'count': len(news_list),
+                'news': news_list
+            }
+
+        print(f"✅ EETimes 爬取完成，获取 {len(news_list)} 条新闻（最近{days}天）")
+        return result
+    except Exception as e:
+        print(f"❌ EETimes 爬取失败: {e}")
+        return {}
+
+
 def convert_to_new_format(raw_results):
     """
     将爬取结果转换为新格式：
@@ -568,6 +610,8 @@ def convert_to_new_format(raw_results):
             company_name = "Cadence"
         elif key.startswith('siemens_'):
             company_name = "Siemens"
+        elif key == 'eetimes':
+            company_name = "EETimes"
         else:
             company_name = COMPANY_NAMES.get(key, key)
         source = data.get('source', '未知来源')
@@ -660,7 +704,11 @@ def main():
     siemens_results = run_siemens_crawler(SIEMENS_CONFIG)
     all_results.update(siemens_results)
 
-    # ======== 11. 未来可以继续添加其他爬虫 ========
+    # ======== 11. 运行 EETimes 爬虫 ========
+    eetimes_results = run_eetimes_crawler(EETIMES_CONFIG)
+    all_results.update(eetimes_results)
+
+    # ======== 12. 未来可以继续添加其他爬虫 ========
     # other_results = run_other_crawler(OTHER_CONFIG)
     # all_results.update(other_results)
     
@@ -699,13 +747,13 @@ def main():
         
         # 创建分类器
         classifier = NewsClassifier()
-        target_categories = ["战略合作", "技术研发", "行业分析"]
+        target_categories = ["财务相关", "战略合作", "技术研发", "行业分析"]
         skip_sources = []  # 不跳过任何来源
-        category_only_sources = ["广立微官网", "概伦电子官网", "合见工软官网", "芯华章官网", "深圳电子商会", "全球半导体观察"]  # 公司官网和行业新闻只做分类筛选，不限公司相关
+        category_only_sources = ["广立微官网", "概伦电子官网", "合见工软官网", "芯华章官网", "深圳电子商会", "全球半导体观察", "EETimes"]  # 公司官网和行业新闻只做分类筛选，不限公司相关
         company_only_sources = ["SemiWiki", "Design-Reuse", "Synopsys官网", "Cadence官网", "Siemens官网"]  # 只做公司相关筛选，不做分类筛选
         
-        print(f"过滤规则: 同花顺新闻筛选 {', '.join(target_categories)} 三类 + 公司直接相关")
-        print(f"         公司官网/行业新闻筛选 {', '.join(target_categories)} 三类（不限公司相关）")
+        print(f"过滤规则: 同花顺新闻筛选 {', '.join(target_categories)} 四类 + 公司直接相关")
+        print(f"         公司官网/行业新闻筛选 {', '.join(target_categories)} 四类（不限公司相关）")
         print(f"         Synopsys 新闻只筛选公司相关（不做分类筛选）\n")
         
         # 执行分类（两层筛选）- 使用转换后的格式
@@ -773,6 +821,7 @@ def main():
         synopsys_crawler = SynopsysNewsCrawler()
         cadence_crawler = CadenceNewsCrawler()
         siemens_crawler = SiemensNewsCrawler()
+        eetimes_crawler = EETimesNewsCrawler()
         
         # 收集所有需要获取内容的新闻
         all_news_items = []
@@ -802,6 +851,8 @@ def main():
                     content = cadence_crawler.fetch_news_content(news['link'])
                 elif source_name == "Siemens官网":
                     content = siemens_crawler.fetch_news_content(news['link'])
+                elif source_name == "EETimes":
+                    content = eetimes_crawler.fetch_news_content(news['link'])
                 else:
                     content = fetch_news_content(news['link'])
                 return {**item, 'content': content, 'content_len': len(content) if content else 0}

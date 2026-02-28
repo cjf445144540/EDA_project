@@ -308,55 +308,79 @@ class SynopsysNewsCrawler:
         return news_list
     
     def fetch_news_content(self, url):
-        """获取新闻详情页的正文内容"""
-        try:
-            response = requests.get(url, headers=self.headers, timeout=15, verify=False)
-            response.encoding = 'utf-8'
-            
-            if response.status_code != 200:
+        """获取新闻详情页的正文内容（带重试机制）"""
+        import time
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(url, headers=self.headers, timeout=20, verify=False)
+                response.encoding = 'utf-8'
+                
+                if response.status_code != 200:
+                    return None
+                
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                # Design-Reuse 专用选择器
+                if 'design-reuse.com' in url:
+                    news_contents = soup.select('.news_content')
+                    if len(news_contents) >= 3:
+                        content_elem = news_contents[2]
+                        # 提取 read more 原始链接（用于后续追取）
+                        read_more_link = None
+                        for a in content_elem.find_all('a'):
+                            if 'read more' in a.get_text(strip=True).lower() or 'click here' in a.get_text(strip=True).lower():
+                                read_more_link = a.get('href', '')
+                                break
+                        paragraphs = content_elem.find_all('p')
+                        if paragraphs:
+                            # 过滤掉 click here to read more 段落
+                            content_parts = []
+                            for p in paragraphs:
+                                txt = p.get_text(strip=True)
+                                if txt and 'click here' not in txt.lower() and 'read more' not in txt.lower():
+                                    content_parts.append(txt)
+                            content = '\n'.join(content_parts)
+                            # 尝试追进原始链接获取更多内容
+                            if read_more_link and read_more_link.startswith('http'):
+                                try:
+                                    orig_resp = requests.get(read_more_link, headers=self.headers, timeout=15, verify=False)
+                                    if orig_resp.status_code == 200:
+                                        orig_soup = BeautifulSoup(orig_resp.text, 'html.parser')
+                                        for sel in ['.press-release-content', '.article-content', '.entry-content', '.post-content', '.content-body', 'article main', 'article']:
+                                            orig_elem = orig_soup.select_one(sel)
+                                            if orig_elem:
+                                                for tag in orig_elem.find_all(['script', 'style', 'nav', 'aside', 'figure']):
+                                                    tag.decompose()
+                                                orig_paras = orig_elem.find_all('p')
+                                                orig_text = '\n'.join([p.get_text(strip=True) for p in orig_paras if p.get_text(strip=True)])
+                                                if orig_text and len(orig_text) > len(content):
+                                                    return orig_text
+                                                break
+                                except Exception:
+                                    pass
+                            if content and len(content) > 50:
+                                return content
+                
+                # 通用选择器
+                for selector in ['.entry-content', '.article-content', '.news-content', '.post-content', 'article', '.content']:
+                    content_elem = soup.select_one(selector)
+                    if content_elem:
+                        for tag in content_elem.find_all(['script', 'style', 'nav', 'aside']):
+                            tag.decompose()
+                        paragraphs = content_elem.find_all('p')
+                        if paragraphs:
+                            content = '\n'.join([p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)])
+                            if content and len(content) > 50:
+                                return content
+                
                 return None
-            
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Design-Reuse 专用选择器
-            if 'design-reuse.com' in url:
-                # 获取第3个 .news_content（主要正文内容）
-                news_contents = soup.select('.news_content')
-                if len(news_contents) >= 3:
-                    content_elem = news_contents[2]  # 第3个（索引2）
-                    paragraphs = content_elem.find_all('p')
-                    if paragraphs:
-                        content = '\n'.join([p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)])
-                        if content and len(content) > 50:
-                            return content
-            
-            # 根据不同来源使用不同选择器
-            content_selectors = [
-                '.entry-content',  # SemiWiki
-                '.article-content',
-                '.news-content',
-                '.post-content',
-                'article',
-                '.content',
-            ]
-            
-            for selector in content_selectors:
-                content_elem = soup.select_one(selector)
-                if content_elem:
-                    for tag in content_elem.find_all(['script', 'style', 'nav', 'aside']):
-                        tag.decompose()
-                    
-                    paragraphs = content_elem.find_all('p')
-                    if paragraphs:
-                        content = '\n'.join([p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)])
-                        if content and len(content) > 50:
-                            return content
-            
-            return None
-            
-        except Exception as e:
-            print(f"  获取详情页出错: {e}")
-            return None
+                
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    time.sleep(1)
+                    continue
+                return None
     
     def save_to_json(self, news_list, filename='synopsys_news.json'):
         """保存新闻到 JSON 文件"""

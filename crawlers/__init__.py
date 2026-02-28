@@ -14,6 +14,7 @@ from .dramx_news_crawler import DramxNewsCrawler
 from .synopsys_news_crawler import SynopsysNewsCrawler
 from .cadence_news_crawler import CadenceNewsCrawler
 from .siemens_news_crawler import SiemensNewsCrawler
+from .eetimes_news_crawler import EETimesNewsCrawler
 
 __all__ = [
     'THSNewsCrawler',
@@ -26,4 +27,5 @@ __all__ = [
     'SynopsysNewsCrawler',
     'CadenceNewsCrawler',
     'SiemensNewsCrawler',
+    'EETimesNewsCrawler',
 ]
