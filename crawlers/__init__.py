@@ -15,6 +15,8 @@ from .synopsys_news_crawler import SynopsysNewsCrawler
 from .cadence_news_crawler import CadenceNewsCrawler
 from .siemens_news_crawler import SiemensNewsCrawler
 from .eetimes_news_crawler import EETimesNewsCrawler
+from .s2c_news_crawler import S2CNewsCrawler
+from .gigada_news_crawler import GigaDANewsCrawler
 
 __all__ = [
     'THSNewsCrawler',
@@ -28,4 +30,6 @@ __all__ = [
     'CadenceNewsCrawler',
     'SiemensNewsCrawler',
     'EETimesNewsCrawler',
+    'S2CNewsCrawler',
+    'GigaDANewsCrawler',
 ]

@@ -7,7 +7,7 @@
 - 未来可继续添加其他爬虫...
 """
 
-from crawlers import THSNewsCrawler, SemitronixNewsCrawler, PrimariusNewsCrawler, UnivistiaNewsCrawler, XepicNewsCrawler, SeccwNewsCrawler, DramxNewsCrawler, SynopsysNewsCrawler, CadenceNewsCrawler, SiemensNewsCrawler, EETimesNewsCrawler
+from crawlers import THSNewsCrawler, SemitronixNewsCrawler, PrimariusNewsCrawler, UnivistiaNewsCrawler, XepicNewsCrawler, SeccwNewsCrawler, DramxNewsCrawler, SynopsysNewsCrawler, CadenceNewsCrawler, SiemensNewsCrawler, EETimesNewsCrawler, S2CNewsCrawler, GigaDANewsCrawler
 from classify_news import NewsClassifier
 from auto_news_writer import get_first_news_link, fetch_news_content, copy_to_clipboard
 import pyperclip
@@ -35,6 +35,8 @@ COMPANY_NAMES = {
     "siemens_semiwiki": "Siemens",  # Siemens SemiWiki
     "siemens_design_reuse": "Siemens",  # Siemens Design-Reuse
     "eetimes": "EETimes",  # EETimes
+    "s2c": "思尔芯",  # 思尔芯
+    "gigada": "鸿芯微纳",  # 鸿芯微纳
 }
 
 # ========================================
@@ -122,6 +124,20 @@ EETIMES_CONFIG = {
     'max_pages': 1,   # 最大爬取页数
     'days': 7,        # 只保留最近几天的新闻
     'keyword': 'EDA', # 搜索关键词
+}
+
+# 思尔芯 新闻配置
+S2C_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': 1,  # 最大爬取页数
+    'days': 30,      # 只保留最近30天的新闻
+}
+
+# 鸿芯微纳 新闻配置
+GIGADA_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': 1,   # 最大爬取页数
+    'days': 30,       # 只保留最近30天的新闻
 }
 
 # 未来可以继续添加其他爬虫配置...
@@ -595,6 +611,70 @@ def run_eetimes_crawler(config):
         return {}
 
 
+def run_s2c_crawler(config):
+    """运行思尔芯官网新闻爬虫"""
+    if not config.get('enabled', False):
+        return {}
+
+    print("\n" + "="*50)
+    print("思尔芯官网新闻爬虫")
+    print("="*50)
+
+    max_pages = config.get('max_pages', 3)
+    days = config.get('days', 30)
+
+    try:
+        crawler = S2CNewsCrawler()
+        news_list = crawler.crawl(max_pages=max_pages, days=days)
+        crawler.save_to_json(news_list)
+
+        result = {}
+        if news_list:
+            result['s2c'] = {
+                'source': '思尔芯官网',
+                'count': len(news_list),
+                'news': news_list
+            }
+
+        print(f"✅ 思尔芯 爬取完成，获取 {len(news_list)} 条新闻（最近{days}天）")
+        return result
+    except Exception as e:
+        print(f"❌ 思尔芯 爬取失败: {e}")
+        return {}
+
+
+def run_gigada_crawler(config):
+    """运行鸿芯微纳官网新闻爬虫"""
+    if not config.get('enabled', False):
+        return {}
+
+    print("\n" + "="*50)
+    print("鸿芯微纳官网新闻爬虫")
+    print("="*50)
+
+    max_pages = config.get('max_pages', 5)
+    days = config.get('days', 30)
+
+    try:
+        crawler = GigaDANewsCrawler()
+        news_list = crawler.crawl(max_pages=max_pages, days=days)
+        crawler.save_to_json(news_list)
+
+        result = {}
+        if news_list:
+            result['gigada'] = {
+                'source': '鸿芯微纳官网',
+                'count': len(news_list),
+                'news': news_list
+            }
+
+        print(f"✅ 鸿芯微纳 爬取完成，获取 {len(news_list)} 条新闻（最近{days}天）")
+        return result
+    except Exception as e:
+        print(f"❌ 鸿芯微纳 爬取失败: {e}")
+        return {}
+
+
 def convert_to_new_format(raw_results):
     """
     将爬取结果转换为新格式：
@@ -612,6 +692,10 @@ def convert_to_new_format(raw_results):
             company_name = "Siemens"
         elif key == 'eetimes':
             company_name = "EETimes"
+        elif key == 's2c':
+            company_name = "思尔芯"
+        elif key == 'gigada':
+            company_name = "鸿芯微纳"
         else:
             company_name = COMPANY_NAMES.get(key, key)
         source = data.get('source', '未知来源')
@@ -708,7 +792,15 @@ def main():
     eetimes_results = run_eetimes_crawler(EETIMES_CONFIG)
     all_results.update(eetimes_results)
 
-    # ======== 12. 未来可以继续添加其他爬虫 ========
+    # ======== 12. 运行 思尔芯 爬虫 ========
+    s2c_results = run_s2c_crawler(S2C_CONFIG)
+    all_results.update(s2c_results)
+
+    # ======== 13. 运行 鸿芯微纳 爬虫 ========
+    gigada_results = run_gigada_crawler(GIGADA_CONFIG)
+    all_results.update(gigada_results)
+
+    # ======== 14. 未来可以继续添加其他爬虫 ========
     # other_results = run_other_crawler(OTHER_CONFIG)
     # all_results.update(other_results)
     
@@ -749,7 +841,7 @@ def main():
         classifier = NewsClassifier()
         target_categories = ["财务相关", "战略合作", "技术研发", "行业分析"]
         skip_sources = []  # 不跳过任何来源
-        category_only_sources = ["广立微官网", "概伦电子官网", "合见工软官网", "芯华章官网", "深圳电子商会", "全球半导体观察", "EETimes"]  # 公司官网和行业新闻只做分类筛选，不限公司相关
+        category_only_sources = ["广立微官网", "概伦电子官网", "合见工软官网", "芯华章官网", "深圳电子商会", "全球半导体观察", "EETimes", "思尔芯官网", "鸿芯微纳官网"]  # 公司官网和行业新闻只做分类筛选，不限公司相关
         company_only_sources = ["SemiWiki", "Design-Reuse", "Synopsys官网", "Cadence官网", "Siemens官网"]  # 只做公司相关筛选，不做分类筛选
         
         print(f"过滤规则: 同花顺新闻筛选 {', '.join(target_categories)} 四类 + 公司直接相关")
@@ -822,6 +914,8 @@ def main():
         cadence_crawler = CadenceNewsCrawler()
         siemens_crawler = SiemensNewsCrawler()
         eetimes_crawler = EETimesNewsCrawler()
+        s2c_crawler = S2CNewsCrawler()
+        gigada_crawler = GigaDANewsCrawler()
         
         # 收集所有需要获取内容的新闻
         all_news_items = []
@@ -853,6 +947,10 @@ def main():
                     content = siemens_crawler.fetch_news_content(news['link'])
                 elif source_name == "EETimes":
                     content = eetimes_crawler.fetch_news_content(news['link'])
+                elif source_name == "思尔芯官网":
+                    content = s2c_crawler.fetch_news_content(news['link'])
+                elif source_name == "鸿芯微纳官网":
+                    content = gigada_crawler.fetch_news_content(news['link'])
                 else:
                     content = fetch_news_content(news['link'])
                 return {**item, 'content': content, 'content_len': len(content) if content else 0}
@@ -988,81 +1086,87 @@ def main():
         print("-" * 60)
         print(f"共 {len(all_news)} 条新闻（已过滤掉字数<100的新闻）")
         
-    # 等待用户输入
-    print("\n请输入新闻序号或直接粘贴链接（直接回车选择第1条）：")
-    user_input = input().strip()
+    # 等待用户输入（循环选择）
+    while True:
+        print("\n请输入新闻序号或直接粘贴链接（直接回车选择第1条，输入 q 退出）：")
+        user_input = input().strip()
         
-    selected_item = None
+        # 退出条件
+        if user_input.lower() in ['q', 'quit', 'exit', '0']:
+            print("\n“再见！")
+            break
         
-    if not user_input:
-        # 默认选择第一条
-        if all_news:
-            selected_item = all_news[0]
-    elif user_input.isdigit():
-        # 用户输入了序号
-        idx = int(user_input) - 1
-        if 0 <= idx < len(all_news):
-            selected_item = all_news[idx]
+        selected_item = None
+        
+        if not user_input:
+            # 默认选择第一条
+            if all_news:
+                selected_item = all_news[0]
+        elif user_input.isdigit():
+            # 用户输入了序号
+            idx = int(user_input) - 1
+            if 0 <= idx < len(all_news):
+                selected_item = all_news[idx]
+            else:
+                print("❌ 无效的序号，请重新输入")
+                continue
+        elif user_input.startswith("http"):
+            # 用户输入了链接
+            selected_item = {
+                'news': {"title": "用户输入的新闻", "link": user_input},
+                'content': None,
+                'content_len': 0,
+                'source': '',
+                'company': ''
+            }
         else:
-            print("无效的序号")
-            return
-    elif user_input.startswith("http"):
-        # 用户输入了链接
-        selected_item = {
-            'news': {"title": "用户输入的新闻", "link": user_input},
-            'content': None,
-            'content_len': 0,
-            'source': '',
-            'company': ''
-        }
-    else:
-        print("无效的输入")
-        return
+            print("❌ 无效的输入，请输入序号、链接或 q 退出")
+            continue
             
-    if selected_item:
-        selected_news = selected_item['news']
-        cached_content = selected_item.get('content')
-        source_name = selected_item.get('source', '')
-        company_name = selected_item.get('company', '')
+        if selected_item:
+            selected_news = selected_item['news']
+            cached_content = selected_item.get('content')
+            source_name = selected_item.get('source', '')
+            company_name = selected_item.get('company', '')
             
-        print(f"\n选取新闻: {selected_news.get('title', '-')}")
-        print(f"来源: {source_name}")
-        print(f"链接: {selected_news['link']}")
+            print(f"\n选取新闻: {selected_news.get('title', '-')}")
+            print(f"来源: {source_name}")
+            print(f"链接: {selected_news['link']}")
             
-        # 使用缓存的内容，如果没有则重新获取
-        if cached_content:
-            content = cached_content
+            # 使用缓存的内容，如果没有则重新获取
+            if cached_content:
+                content = cached_content
+            else:
+                content = fetch_news_content(selected_news['link'])
+            
+            if not content:
+                content = selected_news.get('title', '')
+        
+            content_len = len(content) if content else 0
+            is_complete = content_len > 200
+        
+            is_official = "官网" in source_name
+        
+            # 所有新闻都添加提示词
+            # 官网新闻：添加去主观化要求
+            # 非官网新闻：添加扩充/缩减到800字的要求
+            prompt = copy_to_clipboard(content, selected_news.get('title', '新闻'), source_name)
+            print("\n" + "="*60)
+            print("✅ 提示词已复制到剪贴板！")
+            if is_official:
+                print(f"   （{content_len}字，来自 [{source_name}]，已添加去除主观描述的提示词）")
+            else:
+                print(f"   （{content_len}字，来自 [{source_name}]，已添加扩充/缩减到800字的提示词）")
+            print("="*60)
+        
+            # 保存提示词到 result 目录
+            result_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'result')
+            os.makedirs(result_dir, exist_ok=True)
+            prompt_file = os.path.join(result_dir, 'selected_news_prompt.txt')
+            with open(prompt_file, 'w', encoding='utf-8') as f:
+                f.write(prompt)
+            print(f"📄 提示词已保存到: {prompt_file}")
         else:
-            content = fetch_news_content(selected_news['link'])
-            
-        if not content:
-            content = selected_news.get('title', '')
-        
-        content_len = len(content) if content else 0
-        is_complete = content_len > 200
-        
-        is_official = "官网" in source_name
-        
-        # 所有新闻都添加提示词
-        # 官网新闻：添加去主观化要求
-        # 非官网新闻：添加扩充/缩减到800字的要求
-        prompt = copy_to_clipboard(content, selected_news.get('title', '新闻'), source_name)
-        print("\n" + "="*60)
-        print("✅ 提示词已复制到剪贴板！")
-        if is_official:
-            print(f"   （{content_len}字，来自 [{source_name}]，已添加去除主观描述的提示词）")
-        else:
-            print(f"   （{content_len}字，来自 [{source_name}]，已添加扩充/缩减到800字的提示词）")
-        print("="*60)
-        
-        # 保存提示词到 result 目录
-        result_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'result')
-        os.makedirs(result_dir, exist_ok=True)
-        prompt_file = os.path.join(result_dir, 'selected_news_prompt.txt')
-        with open(prompt_file, 'w', encoding='utf-8') as f:
-            f.write(prompt)
-        print(f"📄 提示词已保存到: {prompt_file}")
-    else:
-        print("\n⚠️  没有找到可用的新闻来生成新闻稿")
+            print("\n⚠️  没有找到可用的新闻来生成新闻稿")
 if __name__ == "__main__":
     main()
