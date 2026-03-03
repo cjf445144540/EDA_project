@@ -58,35 +58,35 @@ THS_CONFIG = {
 SEMITRONIX_CONFIG = {
     'enabled': True,  # 是否启用
     'max_pages': 1,  # 最大爬取页数
-    'months': 1,      # 只保留最近几个月的新闻
+    'days': 7,        # 只保留最近7天的新闻
 }
 
 # 概伦电子官网新闻配置
 PRIMARIUS_CONFIG = {
     'enabled': True,  # 是否启用
     'max_pages': 1,   # 最大爬取页数（只有1页）
-    'months': 1,      # 只保留最近几个月的新闻
+    'days': 7,        # 只保留最近7天的新闻
 }
 
 # 合见工软官网新闻配置
 UNIVISTA_CONFIG = {
     'enabled': True,  # 是否启用
     'max_pages': 1,   # 最大爬取页数
-    'months': 1,      # 只保留最近几个月的新闻
+    'days': 7,        # 只保留最近7天的新闻
 }
 
 # 芯华章官网新闻配置
 XEPIC_CONFIG = {
     'enabled': True,  # 是否启用
     'max_pages': 1,   # 最大爬取页数
-    'months': 1,      # 只保留最近几个月的新闻
+    'days': 7,        # 只保留最近7天的新闻
 }
 
 # 深圳电子商会新闻配置
 SECCW_CONFIG = {
     'enabled': True,  # 是否启用
     'max_pages': 1,   # 最大爬取页数
-    'months': 1,      # 只保留最近几个月的新闻
+    'days': 7,        # 只保留最近7天的新闻
     'keyword': 'EDA', # 搜索关键词
 }
 
@@ -94,7 +94,7 @@ SECCW_CONFIG = {
 DRAMX_CONFIG = {
     'enabled': True,  # 是否启用
     'max_pages': 1,   # 最大爬取页数
-    'months': 1,      # 只保留最近几个月的新闻
+    'days': 7,        # 只保留最近7天的新闻
 }
 
 # Synopsys 新闻配置
@@ -130,14 +130,14 @@ EETIMES_CONFIG = {
 S2C_CONFIG = {
     'enabled': True,  # 是否启用
     'max_pages': 1,  # 最大爬取页数
-    'days': 30,      # 只保留最近30天的新闻
+    'days': 7,       # 只保留最近7天的新闻
 }
 
 # 鸿芯微纳 新闻配置
 GIGADA_CONFIG = {
     'enabled': True,  # 是否启用
     'max_pages': 1,   # 最大爬取页数
-    'days': 30,       # 只保留最近30天的新闻
+    'days': 7,        # 只保留最近7天的新闻
 }
 
 # 未来可以继续添加其他爬虫配置...
@@ -252,11 +252,11 @@ def run_semitronix_crawler(config):
     print("="*50)
     
     max_pages = config.get('max_pages', 10)
-    months = config.get('months', 3)
+    days = config.get('days', 7)
     
     try:
         crawler = SemitronixNewsCrawler()
-        news_list = crawler.crawl(max_pages=max_pages, months=months)
+        news_list = crawler.crawl(max_pages=max_pages, days=days)
         
         # 保存单独的 JSON 文件
         crawler.save_to_json(news_list)
@@ -286,11 +286,11 @@ def run_primarius_crawler(config):
     print("="*50)
     
     max_pages = config.get('max_pages', 10)
-    months = config.get('months', 3)
+    days = config.get('days', 7)
     
     try:
         crawler = PrimariusNewsCrawler()
-        news_list = crawler.crawl(max_pages=max_pages, months=months)
+        news_list = crawler.crawl(max_pages=max_pages, days=days)
         
         # 保存单独的 JSON 文件
         crawler.save_to_json(news_list)
@@ -320,11 +320,11 @@ def run_univista_crawler(config):
     print("="*50)
     
     max_pages = config.get('max_pages', 5)
-    months = config.get('months', 3)
+    days = config.get('days', 7)
     
     try:
         crawler = UnivistiaNewsCrawler()
-        news_list = crawler.crawl(max_pages=max_pages, months=months)
+        news_list = crawler.crawl(max_pages=max_pages, days=days)
         
         # 保存单独的 JSON 文件
         crawler.save_to_json(news_list)
@@ -354,11 +354,11 @@ def run_xepic_crawler(config):
     print("="*50)
     
     max_pages = config.get('max_pages', 5)
-    months = config.get('months', 3)
+    days = config.get('days', 7)
     
     try:
         crawler = XepicNewsCrawler()
-        news_list = crawler.crawl(max_pages=max_pages, months=months)
+        news_list = crawler.crawl(max_pages=max_pages, days=days)
         
         # 保存单独的 JSON 文件
         crawler.save_to_json(news_list)
@@ -388,12 +388,12 @@ def run_seccw_crawler(config):
     print("="*50)
     
     max_pages = config.get('max_pages', 5)
-    months = config.get('months', 3)
+    days = config.get('days', 7)
     keyword = config.get('keyword', 'EDA')
     
     try:
         crawler = SeccwNewsCrawler(keyword=keyword)
-        news_list = crawler.crawl(max_pages=max_pages, months=months)
+        news_list = crawler.crawl(max_pages=max_pages, days=days)
         
         # 保存单独的 JSON 文件
         crawler.save_to_json(news_list)
@@ -423,11 +423,11 @@ def run_dramx_crawler(config):
     print("="*50)
     
     max_pages = config.get('max_pages', 1)
-    months = config.get('months', 1)
+    days = config.get('days', 7)
     
     try:
         crawler = DramxNewsCrawler()
-        news_list = crawler.crawl(max_pages=max_pages, months=months)
+        news_list = crawler.crawl(max_pages=max_pages, days=days)
         
         # 保存单独的 JSON 文件
         crawler.save_to_json(news_list)
@@ -458,11 +458,6 @@ def run_synopsys_crawler(config):
     
     max_pages = config.get('max_pages', 1)
     days = config.get('days', 7)
-    months = config.get('months', None)
-    
-    # days 优先，否则用 months 换算
-    if months is not None and 'days' not in config:
-        days = months * 30
     
     try:
         crawler = SynopsysNewsCrawler()
@@ -503,9 +498,6 @@ def run_cadence_crawler(config):
 
     max_pages = config.get('max_pages', 1)
     days = config.get('days', 7)
-    months = config.get('months', None)
-    if months is not None and 'days' not in config:
-        days = months * 30
 
     try:
         crawler = CadenceNewsCrawler()
@@ -546,9 +538,6 @@ def run_siemens_crawler(config):
 
     max_pages = config.get('max_pages', 1)
     days = config.get('days', 7)
-    months = config.get('months', None)
-    if months is not None and 'days' not in config:
-        days = months * 30
 
     try:
         crawler = SiemensNewsCrawler()

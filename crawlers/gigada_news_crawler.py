@@ -43,7 +43,7 @@ class GigaDANewsCrawler:
             'Origin': 'https://www.giga-da.com',
         }
 
-    def crawl(self, max_pages=5, days=30):
+    def crawl(self, max_pages=5, days=7):
         """
         爬取鸿芯微纳官网新闻
         :param max_pages: 最大爬取页数

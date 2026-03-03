@@ -28,15 +28,15 @@ class DramxNewsCrawler:
             'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
         }
     
-    def crawl(self, max_pages=1, months=1):
+    def crawl(self, max_pages=1, days=7):
         """
         爬取新闻列表
         :param max_pages: 最大爬取页数，默认1页
-        :param months: 只保留最近几个月的新闻，默认1个月
+        :param days: 只保留最近几天的新闻，默认7天
         :return: 新闻列表
         """
         all_news = []
-        cutoff_date = (datetime.now() - timedelta(days=months * 30)).strftime('%Y-%m-%d')
+        cutoff_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
         stop_crawling = False
         
         for page in range(1, max_pages + 1):
