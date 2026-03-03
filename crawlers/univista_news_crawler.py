@@ -73,15 +73,15 @@ class UnivistiaNewsCrawler:
             # 通过检查是否有至少一半的新闻是旧的来判断
             if has_old_news and len(filtered_news) < len(news_list) // 2:
                 stop_crawling = True
-                print(f"  遇到大量超过{months}个月的新闻，停止爬取")
+                print(f"  遇到大量超过{days}天的新闻，停止爬取")
             
             all_news.extend(filtered_news)
-            print(f"第 {page} 页获取 {len(filtered_news)} 条新闻（最近{months}个月）")
+            print(f"第 {page} 页获取 {len(filtered_news)} 条新闻（最近{days}天）")
         
         # 按日期排序（最新的在前）
         all_news.sort(key=lambda x: x.get('date', ''), reverse=True)
         
-        print(f"\n总共获取 {len(all_news)} 条新闻（最近{months}个月）")
+        print(f"\n总共获取 {len(all_news)} 条新闻（最近{days}天）")
         return all_news
     
     def _crawl_page(self, url, is_first_page=False):
@@ -316,7 +316,7 @@ def main():
     crawler = UnivistiaNewsCrawler()
     
     # 爬取新闻（默认爬取5页，最近3个月）
-    news_list = crawler.crawl(max_pages=5, months=3)
+    news_list = crawler.crawl(max_pages=5, days=7)
     
     if news_list:
         # 显示部分结果

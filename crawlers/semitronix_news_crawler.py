@@ -66,13 +66,13 @@ class SemitronixNewsCrawler:
                 elif news_date and news_date < cutoff_date:
                     # 新闻按时间倒序，遇到超过截止日期的新闻就停止
                     stop_crawling = True
-                    print(f"  遇到超过{months}个月的新闻，停止爬取")
+                    print(f"  遇到超过{days}天的新闻，停止爬取")
                     break
             
             all_news.extend(filtered_news)
-            print(f"第 {page} 页获取 {len(filtered_news)} 条新闻（最近{months}个月）")
+            print(f"第 {page} 页获取 {len(filtered_news)} 条新闻（最近{days}天）")
         
-        print(f"\n总共获取 {len(all_news)} 条新闻（最近{months}个月）")
+        print(f"\n总共获取 {len(all_news)} 条新闻（最近{days}天）")
         return all_news
     
     def _crawl_page(self, url):
@@ -242,7 +242,7 @@ def main():
     crawler = SemitronixNewsCrawler()
     
     # 爬取新闻（默认爬取前3页，最近1个月）
-    news_list = crawler.crawl(max_pages=3, months=1)
+    news_list = crawler.crawl(max_pages=3, days=7)
     
     if news_list:
         # 显示部分结果

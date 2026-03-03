@@ -269,7 +269,7 @@ def run_semitronix_crawler(config):
                 "news": news_list
             }
         }
-        print(f"✅ 广立微官网爬取完成，获取 {len(news_list)} 条新闻（最近{months}个月）")
+        print(f"✅ 广立微官网爬取完成，获取 {len(news_list)} 条新闻（最近{days}天）")
         return result
     except Exception as e:
         print(f"❌ 广立微官网爬取失败: {e}")
@@ -303,7 +303,7 @@ def run_primarius_crawler(config):
                 "news": news_list
             }
         }
-        print(f"✅ 概伦电子官网爬取完成，获取 {len(news_list)} 条新闻（最近{months}个月）")
+        print(f"✅ 概伦电子官网爬取完成，获取 {len(news_list)} 条新闻（最近{days}天）")
         return result
     except Exception as e:
         print(f"❌ 概伦电子官网爬取失败: {e}")
@@ -337,7 +337,7 @@ def run_univista_crawler(config):
                 "news": news_list
             }
         }
-        print(f"✅ 合见工软官网爬取完成，获取 {len(news_list)} 条新闻（最近{months}个月）")
+        print(f"✅ 合见工软官网爬取完成，获取 {len(news_list)} 条新闻（最近{days}天）")
         return result
     except Exception as e:
         print(f"❌ 合见工软官网爬取失败: {e}")
@@ -371,7 +371,7 @@ def run_xepic_crawler(config):
                 "news": news_list
             }
         }
-        print(f"✅ 芯华章官网爬取完成，获取 {len(news_list)} 条新闻（最近{months}个月）")
+        print(f"✅ 芯华章官网爬取完成，获取 {len(news_list)} 条新闻（最近{days}天）")
         return result
     except Exception as e:
         print(f"❌ 芯华章官网爬取失败: {e}")
@@ -406,7 +406,7 @@ def run_seccw_crawler(config):
                 "news": news_list
             }
         }
-        print(f"✅ 深圳电子商会爬取完成，获取 {len(news_list)} 条新闻（最近{months}个月）")
+        print(f"✅ 深圳电子商会爬取完成，获取 {len(news_list)} 条新闻（最近{days}天）")
         return result
     except Exception as e:
         print(f"❌ 深圳电子商会爬取失败: {e}")
@@ -440,7 +440,7 @@ def run_dramx_crawler(config):
                 "news": news_list
             }
         }
-        print(f"✅ 全球半导体观察爬取完成，获取 {len(news_list)} 条新闻（最近{months}个月）")
+        print(f"✅ 全球半导体观察爬取完成，获取 {len(news_list)} 条新闻（最近{days}天）")
         return result
     except Exception as e:
         print(f"❌ 全球半导体观察爬取失败: {e}")
