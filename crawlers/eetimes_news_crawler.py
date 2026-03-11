@@ -36,26 +36,27 @@ class EETimesNewsCrawler:
             'Accept-Language': 'en-US,en;q=0.9',
         }
 
-    def crawl(self, max_pages=1, days=7, keyword='EDA'):
+    def crawl(self, max_pages=1, days=7, keywords=None):
         """
         通过 RSS Feed 爬取 EETimes 新闻（快速、稳定）
         :param max_pages: 最大爬取页数（RSS 暂不支持分页，保留参数兼容性）
         :param days: 只保留最近几天的新闻
-        :param keyword: 搜索关键词
+        :param keywords: 搜索关键词列表
         :return: 新闻列表
         """
+        if keywords is None:
+            keywords = ['synopsys', 'cadence', 'siemens', 'EDA']
+        
         all_news = []
         cutoff_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
 
-        print(f"\n正在爬取 EETimes 新闻 (关键词: {keyword})...")
+        print(f"\n正在爬取 EETimes 新闻 (关键词: {', '.join(keywords)})...")
 
-        # 主源: Google News RSS （过滤 eetimes.com）——国内访题快、稳定
-        # 备用: EETimes 官方 RSS（可能因 Cloudflare 超时）
-        rss_urls = [
-            f"https://news.google.com/rss/search?q=site:eetimes.com+{keyword}&hl=en-US&gl=US&ceid=US:en",
-            f"https://www.eetimes.com/?s={keyword}&feed=rss2",
-            "https://www.eetimes.com/category/eda-design/feed/",
-        ]
+        # 为每个关键词生成 RSS URLs
+        rss_urls = []
+        for keyword in keywords:
+            # Google News RSS（国内访问快、稳定）
+            rss_urls.append(f"https://news.google.com/rss/search?q=site:eetimes.com+{keyword}&hl=en-US&gl=US&ceid=US:en")
 
         seen_links = set()
         seen_lock = __import__('threading').Lock()
@@ -73,9 +74,17 @@ class EETimesNewsCrawler:
                 except Exception:
                     pass
 
-        all_news.sort(key=lambda x: x.get('date', ''), reverse=True)
-        print(f"  获取 {len(all_news)} 条新闻")
-        return all_news
+        # 过滤：只保留标题包含关键词的新闻
+        filtered_news = []
+        keywords_lower = [kw.lower() for kw in keywords]
+        for news in all_news:
+            title_lower = news.get('title', '').lower()
+            if any(kw in title_lower for kw in keywords_lower):
+                filtered_news.append(news)
+        
+        filtered_news.sort(key=lambda x: x.get('date', ''), reverse=True)
+        print(f"  获取 {len(all_news)} 条，标题匹配关键词后保留 {len(filtered_news)} 条")
+        return filtered_news
 
     def _fetch_rss(self, rss_url, cutoff_date, seen_links, seen_lock):
         """从单个 RSS URL 获取新闻列表"""
@@ -220,7 +229,7 @@ def main():
     print("=" * 50)
 
     crawler = EETimesNewsCrawler()
-    news_list = crawler.crawl(max_pages=1, days=7, keyword='EDA')
+    news_list = crawler.crawl(max_pages=1, days=7, keywords=['synopsys', 'cadence', 'siemens', 'EDA'])
 
     if news_list:
         print("\n" + "=" * 50)

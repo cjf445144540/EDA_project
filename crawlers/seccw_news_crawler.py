@@ -94,7 +94,8 @@ class SeccwNewsCrawler:
                 url, 
                 headers=self.headers, 
                 timeout=15,
-                verify=False
+                verify=False,
+                proxies={'http': None, 'https': None}
             )
             response.encoding = 'utf-8'
             
@@ -165,7 +166,8 @@ class SeccwNewsCrawler:
                 url,
                 headers=self.headers,
                 timeout=15,
-                verify=False
+                verify=False,
+                proxies={'http': None, 'https': None}
             )
             response.encoding = 'utf-8'
             

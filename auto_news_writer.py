@@ -179,12 +179,16 @@ def fetch_news_content(url):
                 for tag in content_div.find_all(['script', 'style']):
                     tag.decompose()
                 
-                # 提取所有段落文本
-                paragraphs = content_div.find_all('p')
-                if paragraphs:
-                    content = '\n'.join([p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)])
+                # 微信文章特殊处理：内容在section标签中而非p标签
+                if is_wechat_article and selector in ['#js_content', '.rich_media_content']:
+                    content = content_div.get_text(separator='\n', strip=True)
                 else:
-                    content = content_div.get_text(strip=True)
+                    # 提取所有段落文本
+                    paragraphs = content_div.find_all('p')
+                    if paragraphs:
+                        content = '\n'.join([p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)])
+                    else:
+                        content = content_div.get_text(strip=True)
                 
                 if content and len(content) > 30:
                     break

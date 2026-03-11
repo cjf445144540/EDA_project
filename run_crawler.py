@@ -7,9 +7,10 @@
 - 未来可继续添加其他爬虫...
 """
 
-from crawlers import THSNewsCrawler, SemitronixNewsCrawler, PrimariusNewsCrawler, UnivistiaNewsCrawler, XepicNewsCrawler, SeccwNewsCrawler, DramxNewsCrawler, SynopsysNewsCrawler, CadenceNewsCrawler, SiemensNewsCrawler, EETimesNewsCrawler, S2CNewsCrawler, GigaDANewsCrawler
+from crawlers import THSNewsCrawler, SemitronixNewsCrawler, PrimariusNewsCrawler, UnivistiaNewsCrawler, XepicNewsCrawler, SeccwNewsCrawler, DramxNewsCrawler, SynopsysNewsCrawler, CadenceNewsCrawler, SiemensNewsCrawler, EETimesNewsCrawler, S2CNewsCrawler, GigaDANewsCrawler, XpedicNewsCrawler, SinaNewsCrawler, QQNewsCrawler, SohuNewsCrawler
 from classify_news import NewsClassifier
 from auto_news_writer import get_first_news_link, fetch_news_content, copy_to_clipboard
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import pyperclip
 import json
 import os
@@ -37,6 +38,10 @@ COMPANY_NAMES = {
     "eetimes": "EETimes",  # EETimes
     "s2c": "思尔芯",  # 思尔芯
     "gigada": "鸿芯微纳",  # 鸿芯微纳
+    "xpeedic": "芯和半导体",  # 芯和半导体
+    "sina": "行业新闻",  # 新浪网
+    "qq": "行业新闻",  # 腾讯网
+    "sohu": "行业新闻",  # 搜狐网
 }
 
 # ========================================
@@ -84,7 +89,7 @@ XEPIC_CONFIG = {
 
 # 深圳电子商会新闻配置
 SECCW_CONFIG = {
-    'enabled': True,  # 是否启用
+    'enabled': True,  # 暂时禁用（网站不可访问）
     'max_pages': 1,   # 最大爬取页数
     'days': 7,        # 只保留最近7天的新闻
     'keyword': 'EDA', # 搜索关键词
@@ -120,10 +125,10 @@ SIEMENS_CONFIG = {
 
 # EETimes 新闻配置
 EETIMES_CONFIG = {
-    'enabled': False,  # 暂时禁用（网站在当前网络环境下超时）
+    'enabled': True,   # 已启用
     'max_pages': 1,   # 最大爬取页数
     'days': 7,        # 只保留最近几天的新闻
-    'keyword': 'EDA', # 搜索关键词
+    'keywords': ['synopsys', 'cadence', 'siemens', 'EDA'],  # 搜索关键词列表
 }
 
 # 思尔芯 新闻配置
@@ -138,6 +143,37 @@ GIGADA_CONFIG = {
     'enabled': True,  # 是否启用
     'max_pages': 1,   # 最大爬取页数
     'days': 7,        # 只保留最近7天的新闻
+}
+
+# 芯和半导体 新闻配置
+XPEEDIC_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': 1,   # 最大爬取页数
+    'days': 7,        # 只保留最近7天的新闻
+}
+
+# 新浪网 新闻配置
+SINA_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': 1,   # 最大爬取页数
+    'days': 7,        # 只保留最近7天的新闻
+    'keyword': 'EDA', # 搜索关键词
+}
+
+# 腾讯网 新闻配置
+QQ_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': 1,   # 最大爬取页数
+    'days': 7,        # 只保留最近7天的新闻
+    'keyword': 'EDA', # 搜索关键词
+}
+
+# 搜狐网 新闻配置
+SOHU_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': 1,   # 最大爬取页数
+    'days': 7,        # 只保留最近7天的新闻
+    'keyword': 'EDA', # 搜索关键词
 }
 
 # 未来可以继续添加其他爬虫配置...
@@ -578,11 +614,11 @@ def run_eetimes_crawler(config):
 
     max_pages = config.get('max_pages', 1)
     days = config.get('days', 7)
-    keyword = config.get('keyword', 'EDA')
+    keywords = config.get('keywords', ['synopsys', 'cadence', 'siemens'])
 
     try:
         crawler = EETimesNewsCrawler()
-        news_list = crawler.crawl(max_pages=max_pages, days=days, keyword=keyword)
+        news_list = crawler.crawl(max_pages=max_pages, days=days, keywords=keywords)
         crawler.save_to_json(news_list)
 
         result = {}
@@ -664,6 +700,137 @@ def run_gigada_crawler(config):
         return {}
 
 
+def run_xpeedic_crawler(config):
+    """运行芯和半导体官网新闻爬虫"""
+    if not config.get('enabled', False):
+        return {}
+
+    print("\n" + "="*50)
+    print("芯和半导体官网新闻爬虫")
+    print("="*50)
+
+    max_pages = config.get('max_pages', 3)
+    days = config.get('days', 30)
+
+    try:
+        crawler = XpedicNewsCrawler()
+        news_list = crawler.crawl(max_pages=max_pages, days=days)
+        crawler.save_to_json(news_list)
+
+        result = {}
+        if news_list:
+            result['xpeedic'] = {
+                'source': '芯和半导体官网',
+                'count': len(news_list),
+                'news': news_list
+            }
+
+        print(f"✅ 芯和半导体 爬取完成，获取 {len(news_list)} 条新闻（最近{days}天）")
+        return result
+    except Exception as e:
+        print(f"❌ 芯和半导体 爬取失败: {e}")
+        return {}
+
+
+def run_sina_crawler(config):
+    """运行新浪网新闻爬虫"""
+    if not config.get('enabled', False):
+        return {}
+
+    print("\n" + "="*50)
+    print("新浪网新闻爬虫")
+    print("="*50)
+
+    max_pages = config.get('max_pages', 3)
+    days = config.get('days', 7)
+    keyword = config.get('keyword', 'EDA')
+
+    try:
+        crawler = SinaNewsCrawler(keyword=keyword)
+        news_list = crawler.crawl(max_pages=max_pages, days=days)
+        crawler.save_to_json(news_list)
+
+        result = {}
+        if news_list:
+            result['sina'] = {
+                'source': '新浪网',
+                'count': len(news_list),
+                'news': news_list
+            }
+
+        print(f"✅ 新浪网 爬取完成，获取 {len(news_list)} 条新闻（最近{days}天）")
+        return result
+    except Exception as e:
+        print(f"❌ 新浪网 爬取失败: {e}")
+        return {}
+
+
+def run_qq_crawler(config):
+    """运行腾讯网新闻爬虫"""
+    if not config.get('enabled', False):
+        return {}
+
+    print("\n" + "="*50)
+    print("腾讯网新闻爬虫")
+    print("="*50)
+
+    max_pages = config.get('max_pages', 3)
+    days = config.get('days', 7)
+    keyword = config.get('keyword', 'EDA')
+
+    try:
+        crawler = QQNewsCrawler(keyword=keyword)
+        news_list = crawler.crawl(max_pages=max_pages, days=days)
+        crawler.save_to_json(news_list)
+
+        result = {}
+        if news_list:
+            result['qq'] = {
+                'source': '腾讯网',
+                'count': len(news_list),
+                'news': news_list
+            }
+
+        print(f"✅ 腾讯网 爬取完成，获取 {len(news_list)} 条新闻（最近{days}天）")
+        return result
+    except Exception as e:
+        print(f"❌ 腾讯网 爬取失败: {e}")
+        return {}
+
+
+def run_sohu_crawler(config):
+    """运行搜狐网新闻爬虫"""
+    if not config.get('enabled', False):
+        return {}
+
+    print("\n" + "="*50)
+    print("搜狐网新闻爬虫")
+    print("="*50)
+
+    max_pages = config.get('max_pages', 3)
+    days = config.get('days', 7)
+    keyword = config.get('keyword', 'EDA')
+
+    try:
+        crawler = SohuNewsCrawler(keyword=keyword)
+        news_list = crawler.crawl(max_pages=max_pages, days=days)
+        crawler.save_to_json(news_list)
+
+        result = {}
+        if news_list:
+            result['sohu'] = {
+                'source': '搜狐网',
+                'count': len(news_list),
+                'news': news_list
+            }
+
+        print(f"✅ 搜狐网 爬取完成，获取 {len(news_list)} 条新闻（最近{days}天）")
+        return result
+    except Exception as e:
+        print(f"❌ 搜狐网 爬取失败: {e}")
+        return {}
+
+
 def convert_to_new_format(raw_results):
     """
     将爬取结果转换为新格式：
@@ -685,6 +852,14 @@ def convert_to_new_format(raw_results):
             company_name = "思尔芯"
         elif key == 'gigada':
             company_name = "鸿芯微纳"
+        elif key == 'xpeedic':
+            company_name = "芯和半导体"
+        elif key == 'sina':
+            company_name = "行业新闻"
+        elif key == 'qq':
+            company_name = "行业新闻"
+        elif key == 'sohu':
+            company_name = "行业新闻"
         else:
             company_name = COMPANY_NAMES.get(key, key)
         source = data.get('source', '未知来源')
@@ -737,61 +912,65 @@ def main():
     
     all_results = {}
     
-    # ======== 1. 运行同花顺爬虫 ========
-    ths_results = run_ths_crawler(THS_CONFIG)
-    all_results.update(ths_results)
+    # ======== 并行运行所有爬虫 ========
+    print("\n开始并行爬取新闻...")
     
-    # ======== 2. 运行广立微官网爬虫 ========
-    semitronix_results = run_semitronix_crawler(SEMITRONIX_CONFIG)
-    all_results.update(semitronix_results)
+    # 定义所有爬虫任务
+    crawler_tasks = [
+        ("同花顺", run_ths_crawler, THS_CONFIG),
+        ("广立微官网", run_semitronix_crawler, SEMITRONIX_CONFIG),
+        ("概伦电子官网", run_primarius_crawler, PRIMARIUS_CONFIG),
+        ("合见工软官网", run_univista_crawler, UNIVISTA_CONFIG),
+        ("芯华章官网", run_xepic_crawler, XEPIC_CONFIG),
+        ("深圳电子商会", run_seccw_crawler, SECCW_CONFIG),
+        ("全球半导体观察", run_dramx_crawler, DRAMX_CONFIG),
+        ("Synopsys", run_synopsys_crawler, SYNOPSYS_CONFIG),
+        ("Cadence", run_cadence_crawler, CADENCE_CONFIG),
+        ("Siemens", run_siemens_crawler, SIEMENS_CONFIG),
+        ("EETimes", run_eetimes_crawler, EETIMES_CONFIG),
+        ("思尔芯", run_s2c_crawler, S2C_CONFIG),
+        ("鸿芯微纳", run_gigada_crawler, GIGADA_CONFIG),
+        ("芯和半导体", run_xpeedic_crawler, XPEEDIC_CONFIG),
+        ("新浪网", run_sina_crawler, SINA_CONFIG),
+        ("腾讯网", run_qq_crawler, QQ_CONFIG),
+        ("搜狐网", run_sohu_crawler, SOHU_CONFIG),
+    ]
     
-    # ======== 3. 运行概伦电子官网爬虫 ========
-    primarius_results = run_primarius_crawler(PRIMARIUS_CONFIG)
-    all_results.update(primarius_results)
+    # 过滤已启用的爬虫
+    enabled_tasks = [(name, func, config) for name, func, config in crawler_tasks if config.get('enabled', False)]
     
-    # ======== 4. 运行合见工软官网爬虫 ========
-    univista_results = run_univista_crawler(UNIVISTA_CONFIG)
-    all_results.update(univista_results)
+    import time
+    start_time = time.time()
     
-    # ======== 5. 运行芯华章官网爬虫 ========
-    xepic_results = run_xepic_crawler(XEPIC_CONFIG)
-    all_results.update(xepic_results)
+    # 并行执行爬虫（最多8个线程）
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        future_to_name = {executor.submit(func, config): name for name, func, config in enabled_tasks}
+        
+        completed_count = 0
+        for future in as_completed(future_to_name):
+            name = future_to_name[future]
+            completed_count += 1
+            try:
+                result = future.result()
+                all_results.update(result)
+                # 统计新闻数量
+                news_count = 0
+                if result:
+                    for v in result.values():
+                        if isinstance(v, dict):
+                            for vv in v.values():
+                                if isinstance(vv, list):
+                                    news_count += len(vv)
+                                elif isinstance(vv, int):
+                                    news_count += vv
+                        elif isinstance(v, list):
+                            news_count += len(v)
+                print(f"  [{completed_count}/{len(enabled_tasks)}] {name} 完成 ({news_count}条)")
+            except Exception as e:
+                print(f"  [{completed_count}/{len(enabled_tasks)}] {name} 失败: {e}")
     
-    # ======== 6. 运行深圳电子商会爬虫 ========
-    seccw_results = run_seccw_crawler(SECCW_CONFIG)
-    all_results.update(seccw_results)
-    
-    # ======== 7. 运行全球半导体观察爬虫 ========
-    dramx_results = run_dramx_crawler(DRAMX_CONFIG)
-    all_results.update(dramx_results)
-    
-    # ======== 8. 运行 Synopsys 爬虫 ========
-    synopsys_results = run_synopsys_crawler(SYNOPSYS_CONFIG)
-    all_results.update(synopsys_results)
-
-    # ======== 9. 运行 Cadence 爬虫 ========
-    cadence_results = run_cadence_crawler(CADENCE_CONFIG)
-    all_results.update(cadence_results)
-
-    # ======== 10. 运行 Siemens 爬虫 ========
-    siemens_results = run_siemens_crawler(SIEMENS_CONFIG)
-    all_results.update(siemens_results)
-
-    # ======== 11. 运行 EETimes 爬虫 ========
-    eetimes_results = run_eetimes_crawler(EETIMES_CONFIG)
-    all_results.update(eetimes_results)
-
-    # ======== 12. 运行 思尔芯 爬虫 ========
-    s2c_results = run_s2c_crawler(S2C_CONFIG)
-    all_results.update(s2c_results)
-
-    # ======== 13. 运行 鸿芯微纳 爬虫 ========
-    gigada_results = run_gigada_crawler(GIGADA_CONFIG)
-    all_results.update(gigada_results)
-
-    # ======== 14. 未来可以继续添加其他爬虫 ========
-    # other_results = run_other_crawler(OTHER_CONFIG)
-    # all_results.update(other_results)
+    elapsed = time.time() - start_time
+    print(f"\n爬取完成，耗时 {elapsed:.1f} 秒")
     
     # ======== 保存汇总结果 ========
     if all_results:
@@ -829,8 +1008,8 @@ def main():
         # 创建分类器
         classifier = NewsClassifier()
         target_categories = ["财务相关", "战略合作", "技术研发", "行业分析"]
-        skip_sources = []  # 不跳过任何来源
-        category_only_sources = ["广立微官网", "概伦电子官网", "合见工软官网", "芯华章官网", "深圳电子商会", "全球半导体观察", "EETimes", "思尔芯官网", "鸿芯微纳官网"]  # 公司官网和行业新闻只做分类筛选，不限公司相关
+        skip_sources = ["EETimes"]  # EETimes已用synopsys/cadence/siemens搜索，直接保留
+        category_only_sources = ["广立微官网", "概伦电子官网", "合见工软官网", "芯华章官网", "深圳电子商会", "全球半导体观察", "思尔芯官网", "鸿芯微纳官网", "芯和半导体官网", "新浪网", "腾讯网", "搜狐网"]  # 公司官网和行业新闻只做分类筛选，不限公司相关
         company_only_sources = ["SemiWiki", "Design-Reuse", "Synopsys官网", "Cadence官网", "Siemens官网"]  # 只做公司相关筛选，不做分类筛选
         
         print(f"过滤规则: 同花顺新闻筛选 {', '.join(target_categories)} 四类 + 公司直接相关")
@@ -853,6 +1032,22 @@ def main():
                 classified_results[company_name][source_name].sort(
                     key=lambda x: x.get('date', ''), reverse=True
                 )
+        
+        # 去重：去掉标题重复的新闻（跨来源去重）
+        seen_titles = set()
+        total_before = sum(len(news_list) for sources in classified_results.values() for news_list in sources.values())
+        for company_name in classified_results:
+            for source_name in classified_results[company_name]:
+                unique_news = []
+                for news in classified_results[company_name][source_name]:
+                    title = news.get('title', '').strip()
+                    if title and title not in seen_titles:
+                        seen_titles.add(title)
+                        unique_news.append(news)
+                classified_results[company_name][source_name] = unique_news
+        total_after = sum(len(news_list) for sources in classified_results.values() for news_list in sources.values())
+        if total_before > total_after:
+            print(f"\n去重: {total_before} 条 → {total_after} 条（去掉 {total_before - total_after} 条重复标题）")
         
         # 保存分类结果
         classifier.save_classified_results(classified_results)
@@ -905,6 +1100,10 @@ def main():
         eetimes_crawler = EETimesNewsCrawler()
         s2c_crawler = S2CNewsCrawler()
         gigada_crawler = GigaDANewsCrawler()
+        xpeedic_crawler = XpedicNewsCrawler()
+        sina_crawler = SinaNewsCrawler()
+        qq_crawler = QQNewsCrawler()
+        sohu_crawler = SohuNewsCrawler()
         
         # 收集所有需要获取内容的新闻
         all_news_items = []
@@ -940,6 +1139,14 @@ def main():
                     content = s2c_crawler.fetch_news_content(news['link'])
                 elif source_name == "鸿芯微纳官网":
                     content = gigada_crawler.fetch_news_content(news['link'])
+                elif source_name == "芯和半导体官网":
+                    content = xpeedic_crawler.fetch_news_content(news['link'])
+                elif source_name == "新浪网":
+                    content = sina_crawler.fetch_news_content(news['link'])
+                elif source_name == "腾讯网":
+                    content = qq_crawler.fetch_news_content(news['link'])
+                elif source_name == "搜狐网":
+                    content = sohu_crawler.fetch_news_content(news['link'])
                 else:
                     content = fetch_news_content(news['link'])
                 return {**item, 'content': content, 'content_len': len(content) if content else 0}
@@ -947,8 +1154,6 @@ def main():
                 return {**item, 'content': None, 'content_len': 0}
         
         # 使用线程池并行获取
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        
         results = []
         total = len(all_news_items)
         completed = 0
