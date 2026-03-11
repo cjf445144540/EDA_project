@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-概伦电子官网新闻爬虫
-爬取 https://www.primarius-tech.com/aboutus/news.html 的新闻链接
+广立微官网新闻爬虫
+爬取 https://www.semitronix.com/news/company-info/ 的新闻链接
 """
 
 import requests
@@ -16,12 +16,12 @@ from datetime import datetime, timedelta
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
-class PrimariusNewsCrawler:
-    """概伦电子官网新闻爬虫"""
+class SemitronixNewsCrawler:
+    """广立微官网新闻爬虫"""
     
     def __init__(self):
-        self.base_url = "https://www.primarius-tech.com"
-        self.news_url = "https://www.primarius-tech.com/aboutus/news.html"
+        self.base_url = "https://www.semitronix.com"
+        self.news_url = "https://www.semitronix.com/news/company-info/"
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -45,8 +45,11 @@ class PrimariusNewsCrawler:
                 
             print(f"正在爬取第 {page} 页...")
             
-            # 构建分页 URL（概伦电子官网新闻页面似乎没有分页，只有一页）
-            url = self.news_url
+            # 构建分页 URL
+            if page == 1:
+                url = self.news_url
+            else:
+                url = f"{self.news_url}?page={page}"
             
             news_list = self._crawl_page(url)
             
@@ -90,130 +93,129 @@ class PrimariusNewsCrawler:
             soup = BeautifulSoup(response.text, 'html.parser')
             news_list = []
             
-            # 查找新闻列表容器
-            news_container = soup.find('ul', class_='news_list')
-            if not news_container:
-                print("  未找到新闻列表容器")
-                return []
+            # 查找所有新闻链接（排除分页链接）
+            news_links = soup.select('a[href*="/news/company-info/"]')
             
-            # 查找所有新闻项
-            news_items = news_container.find_all('li')
-            
-            for item in news_items:
-                # 查找链接
-                link_tag = item.find('a', href=True)
-                if not link_tag:
-                    continue
+            for link in news_links:
+                href = link.get('href', '')
                 
-                href = link_tag.get('href', '')
-                if not href:
+                # 过滤掉非新闻链接（如分页链接、导航链接）
+                if not href or not re.search(r'/news/company-info/\d+\.html', href):
                     continue
                 
                 # 获取标题
-                title_elem = item.find('h3')
-                if title_elem:
-                    title = title_elem.get_text(strip=True)
-                else:
-                    title = link_tag.get_text(strip=True)
-                
+                title = link.get_text(strip=True)
                 if not title or len(title) < 5:
                     continue
                 
-                # 提取日期（查找 li 中的日期元素）
-                date = ''
-                # 尝试多种方式提取日期
-                date_elem = item.find(class_=lambda x: x and ('date' in x.lower() or 'time' in x.lower()))
-                if date_elem:
-                    date_text = date_elem.get_text(strip=True)
-                    date_match = re.search(r'(\d{4}[./]\d{1,2}[./]\d{1,2})', date_text)
-                    if date_match:
-                        date = date_match.group(1).replace('.', '-').replace('/', '-')
-                        # 补齐月份和日期的前导零
-                        parts = date.split('-')
-                        if len(parts) == 3:
-                            date = f"{parts[0]}-{parts[1].zfill(2)}-{parts[2].zfill(2)}"
-                
-                # 如果没找到，尝试从整个 item 中提取（新闻日期在文本最后）
-                if not date:
-                    item_text = item.get_text()
-                    # 匹配 YYYY.MM.DD 格式
-                    date_match = re.search(r'(\d{4}[./]\d{1,2}[./]\d{1,2})', item_text)
-                    if date_match:
-                        date = date_match.group(1).replace('.', '-').replace('/', '-')
-                        # 补齐月份和日期的前导零
-                        parts = date.split('-')
-                        if len(parts) == 3:
-                            date = f"{parts[0]}-{parts[1].zfill(2)}-{parts[2].zfill(2)}"
+                # 从标题中提取日期并移除
+                date_match = re.search(r'(\d{4}-\d{2}-\d{2})$', title)
+                if date_match:
+                    date = date_match.group(1)
+                    title = title.replace(date, '').strip()
+                else:
+                    date = self._extract_date(link)
                 
                 # 构建完整链接
-                if href.startswith('http'):
-                    full_url = href
-                elif href.startswith('/'):
+                if href.startswith('/'):
                     full_url = self.base_url + href
                 else:
-                    # 相对路径
-                    full_url = f"{self.base_url}/aboutus/{href}"
+                    full_url = href
                 
                 # 避免重复
                 if not any(n['link'] == full_url for n in news_list):
                     news_list.append({
                         'title': title,
                         'link': full_url,
-                        'date': date or '',
-                        'source': '概伦电子官网'
+                        'date': date,
+                        'source': '广立微官网'
                     })
             
             return news_list
             
         except Exception as e:
             print(f"爬取页面时出错: {e}")
-            import traceback
-            traceback.print_exc()
             return []
     
-    def _extract_date(self, element):
-        """从元素中提取日期"""
+    def _extract_date(self, link_element):
+        """从链接元素附近提取日期"""
+        # 尝试从父元素或兄弟元素中查找日期
+        parent = link_element.parent
+        if parent:
+            text = parent.get_text()
+            # 匹配日期格式 YYYY-MM-DD
+            date_match = re.search(r'(\d{4}-\d{2}-\d{2})', text)
+            if date_match:
+                return date_match.group(1)
+        return ''
+    
+    def fetch_news_content(self, url):
+        """
+        获取新闻详情页的正文内容
+        :param url: 新闻链接
+        :return: 正文内容
+        """
         try:
-            # 尝试查找包含日期的元素
-            date_patterns = [
-                r'(\d{4}[-/]\d{2}[-/]\d{2})',
-                r'(\d{4}年\d{1,2}月\d{1,2}日)',
+            response = requests.get(
+                url, 
+                headers=self.headers, 
+                timeout=15,
+                verify=False
+            )
+            response.encoding = 'utf-8'
+            
+            if response.status_code != 200:
+                return None
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # 广立微新闻详情页的内容选择器
+            content_selectors = [
+                '.article-content',
+                '.news-content',
+                '.content',
+                'article',
+                '.main-content',
             ]
             
-            # 在当前元素及其子元素中查找
-            text = element.get_text()
-            for pattern in date_patterns:
-                match = re.search(pattern, text)
-                if match:
-                    date_str = match.group(1)
-                    # 统一格式为 YYYY-MM-DD
-                    date_str = re.sub(r'年', '-', date_str)
-                    date_str = re.sub(r'月', '-', date_str)
-                    date_str = re.sub(r'日', '', date_str)
-                    date_str = date_str.replace('/', '-')
+            for selector in content_selectors:
+                content_div = soup.select_one(selector)
+                if content_div:
+                    # 移除脚本和样式
+                    for tag in content_div.find_all(['script', 'style']):
+                        tag.decompose()
                     
-                    # 确保格式正确
-                    try:
-                        datetime.strptime(date_str, '%Y-%m-%d')
-                        return date_str
-                    except:
-                        pass
+                    paragraphs = content_div.find_all('p')
+                    if paragraphs:
+                        content = '\n'.join([p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)])
+                        if content and len(content) > 50:
+                            return content
             
-            return ''
-        except Exception:
-            return ''
+            # 备用方案：提取 body 中的 p 标签
+            body = soup.find('body')
+            if body:
+                paragraphs = body.find_all('p')
+                texts = [p.get_text(strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 20]
+                if texts:
+                    return '\n'.join(texts)
+            
+            return None
+            
+        except Exception as e:
+            print(f"获取新闻内容时出错: {e}")
+            return None
     
-    def save_to_json(self, news_list, filename='primarius_news.json'):
+    def save_to_json(self, news_list, filename='semitronix_news.json'):
         """保存新闻到 JSON 文件（三级嵌套格式）"""
-        # 输出到 output 目录
-        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'json')
+        # 输出到 json/official 目录
+        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'json', 'official')
         os.makedirs(output_dir, exist_ok=True)
         filepath = os.path.join(output_dir, filename)
         
         # 三级嵌套格式：公司名称 -> 来源 -> 新闻列表
         data = {
-            "概伦电子": {
-                "概伦电子官网": [
+            "广立微": {
+                "广立微官网": [
                     {
                         'title': news.get('title', ''),
                         'link': news.get('link', ''),
@@ -234,30 +236,30 @@ class PrimariusNewsCrawler:
 def main():
     """主函数"""
     print("=" * 50)
-    print("概伦电子官网新闻爬虫")
+    print("广立微官网新闻爬虫")
     print("=" * 50)
     
-    crawler = PrimariusNewsCrawler()
+    crawler = SemitronixNewsCrawler()
     
-    # 爬取新闻(默认爬取1页,最近1个月)
-    news_list = crawler.crawl(max_pages=1, days=7)
+    # 爬取新闻（默认爬取前3页，最近1个月）
+    news_list = crawler.crawl(max_pages=3, days=7)
     
     if news_list:
         # 显示部分结果
         print("\n" + "=" * 50)
-        print(f"爬取结果预览（前5条）：")
+        print("爬取结果预览（前5条）：")
         print("=" * 50)
         
         for i, news in enumerate(news_list[:5], 1):
             print(f"\n{i}. {news['title']}")
             print(f"   日期: {news['date']}")
             print(f"   链接: {news['link']}")
-        
-        # 保存到 JSON
-        crawler.save_to_json(news_list)
     else:
         print("\n未获取到任何新闻")
+    
+    # 无论是否有新闻都保存文件
+    crawler.save_to_json(news_list)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

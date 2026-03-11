@@ -256,7 +256,7 @@ class SiemensNewsCrawler:
     
     def save_to_json(self, news_list, filename='siemens_news.json'):
         """保存新闻到 JSON 文件"""
-        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'json')
+        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'json', 'official')
         os.makedirs(output_dir, exist_ok=True)
         filepath = os.path.join(output_dir, filename)
 

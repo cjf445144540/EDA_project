@@ -4,40 +4,47 @@
 包含各公司官网和数据源的新闻爬虫
 """
 
+# 行业/媒体新闻爬虫
 from .stock_news_crawler import THSNewsCrawler
-from .semitronix_news_crawler import SemitronixNewsCrawler
-from .primarius_news_crawler import PrimariusNewsCrawler
-from .univista_news_crawler import UnivistiaNewsCrawler
-from .xepic_news_crawler import XepicNewsCrawler
 from .seccw_news_crawler import SeccwNewsCrawler
 from .dramx_news_crawler import DramxNewsCrawler
-from .synopsys_news_crawler import SynopsysNewsCrawler
-from .cadence_news_crawler import CadenceNewsCrawler
-from .siemens_news_crawler import SiemensNewsCrawler
 from .eetimes_news_crawler import EETimesNewsCrawler
-from .s2c_news_crawler import S2CNewsCrawler
-from .gigada_news_crawler import GigaDANewsCrawler
-from .xpeedic_news_crawler import XpedicNewsCrawler
 from .sohu_news_crawler import SohuNewsCrawler
 from .sina_news_crawler import SinaNewsCrawler
 from .qq_news_crawler import QQNewsCrawler
 
+# 公司官网爬虫（从 official 子目录导入）
+from .official import (
+    SemitronixNewsCrawler,
+    PrimariusNewsCrawler,
+    UnivistiaNewsCrawler,
+    XepicNewsCrawler,
+    S2CNewsCrawler,
+    GigaDANewsCrawler,
+    XpedicNewsCrawler,
+    SynopsysNewsCrawler,
+    CadenceNewsCrawler,
+    SiemensNewsCrawler,
+)
+
 __all__ = [
+    # 行业/媒体
     'THSNewsCrawler',
+    'SeccwNewsCrawler',
+    'DramxNewsCrawler',
+    'EETimesNewsCrawler',
+    'SohuNewsCrawler',
+    'SinaNewsCrawler',
+    'QQNewsCrawler',
+    # 公司官网
     'SemitronixNewsCrawler',
     'PrimariusNewsCrawler',
     'UnivistiaNewsCrawler',
     'XepicNewsCrawler',
-    'SeccwNewsCrawler',
-    'DramxNewsCrawler',
-    'SynopsysNewsCrawler',
-    'CadenceNewsCrawler',
-    'SiemensNewsCrawler',
-    'EETimesNewsCrawler',
     'S2CNewsCrawler',
     'GigaDANewsCrawler',
     'XpedicNewsCrawler',
-    'SohuNewsCrawler',
-    'SinaNewsCrawler',
-    'QQNewsCrawler',
+    'SynopsysNewsCrawler',
+    'CadenceNewsCrawler',
+    'SiemensNewsCrawler',
 ]
