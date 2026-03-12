@@ -80,7 +80,7 @@ class CadenceNewsCrawler:
         for page in range(1, max_pages + 1):
             url = base_url if page == 1 else f"{base_url}page/{page}/"
             try:
-                response = requests.get(url, headers=self.headers, timeout=15, verify=False)
+                response = requests.get(url, headers=self.headers, timeout=15, verify=False, proxies={'http': None, 'https': None})
                 response.encoding = 'utf-8'
                 if response.status_code != 200:
                     break
@@ -135,7 +135,7 @@ class CadenceNewsCrawler:
         for page in range(max_pages):
             url = f"{base_url}?search_in=cadence" if page == 0 else f"{base_url}?p={page}&search_in=cadence"
             try:
-                response = requests.get(url, headers=self.headers, timeout=15, verify=False)
+                response = requests.get(url, headers=self.headers, timeout=15, verify=False, proxies={'http': None, 'https': None})
                 response.encoding = 'utf-8'
                 if response.status_code != 200:
                     break
@@ -206,7 +206,7 @@ class CadenceNewsCrawler:
             start = page * rows_per_page
             url = f"{base_url}&start={start}"
             try:
-                response = requests.get(url, headers=self.headers, timeout=15, verify=False)
+                response = requests.get(url, headers=self.headers, timeout=15, verify=False, proxies={'http': None, 'https': None})
                 response.encoding = 'utf-8'
                 if response.status_code != 200:
                     break
@@ -254,7 +254,7 @@ class CadenceNewsCrawler:
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                response = requests.get(url, headers=self.headers, timeout=20, verify=False)
+                response = requests.get(url, headers=self.headers, timeout=20, verify=False, proxies={'http': None, 'https': None})
                 response.encoding = 'utf-8'
                 
                 if response.status_code != 200:
@@ -282,7 +282,7 @@ class CadenceNewsCrawler:
                             content = '\n'.join(content_parts)
                             if read_more_link and read_more_link.startswith('http'):
                                 try:
-                                    orig_resp = requests.get(read_more_link, headers=self.headers, timeout=15, verify=False)
+                                    orig_resp = requests.get(read_more_link, headers=self.headers, timeout=15, verify=False, proxies={'http': None, 'https': None})
                                     if orig_resp.status_code == 200:
                                         orig_soup = BeautifulSoup(orig_resp.text, 'html.parser')
                                         orig_text = None

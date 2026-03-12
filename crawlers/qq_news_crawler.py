@@ -276,22 +276,39 @@ class QQNewsCrawler:
         print(f"\n正在爬取 腾讯网 新闻（关键词: {self.keyword}，最近 {days} 天，使用Selenium）...")
         
         try:
-            # 配置Chrome选项
+            # 配置Chrome选项（增强稳定性）
             chrome_options = Options()
-            chrome_options.add_argument('--headless')
+            chrome_options.add_argument('--headless=new')  # 使用新版headless模式，更稳定
             chrome_options.add_argument('--disable-gpu')
             chrome_options.add_argument('--no-sandbox')
             chrome_options.add_argument('--disable-dev-shm-usage')
+            chrome_options.add_argument('--disable-extensions')
+            chrome_options.add_argument('--disable-software-rasterizer')
+            chrome_options.add_argument('--disable-background-networking')
+            chrome_options.add_argument('--disable-sync')
+            chrome_options.add_argument('--proxy-server=direct://')  # 禁用代理
+            chrome_options.add_argument('--proxy-bypass-list=*')
             chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
             
-            # 尝试使用webdriver_manager自动管理驱动
+            # 尝试启动Chrome（优先使用系统自带驱动，更快）
+            print("  正在启动Chrome...")
             try:
-                from webdriver_manager.chrome import ChromeDriverManager
-                service = Service(ChromeDriverManager().install())
-                driver = webdriver.Chrome(service=service, options=chrome_options)
-            except:
-                # 直接使用系统Chrome
                 driver = webdriver.Chrome(options=chrome_options)
+            except Exception as e:
+                print(f"  系统Chrome失败: {e}，尝试webdriver_manager...")
+                try:
+                    import os
+                    os.environ['WDM_LOG_LEVEL'] = '0'
+                    os.environ['WDM_LOCAL'] = '1'
+                    from webdriver_manager.chrome import ChromeDriverManager
+                    service = Service(ChromeDriverManager().install())
+                    driver = webdriver.Chrome(service=service, options=chrome_options)
+                except Exception as e2:
+                    print(f"  Selenium启动失败: {e2}")
+                    return []
+            
+            # 设置页面加载超时
+            driver.set_page_load_timeout(30)
             
             for page_num in range(1, max_pages + 1):
                 if page_num == 1:
@@ -367,10 +384,14 @@ class QQNewsCrawler:
                 
                 time.sleep(1)
             
-            driver.quit()
-            
         except Exception as e:
             print(f"  爬取出错: {e}")
+        finally:
+            # 确保Chrome正确关闭
+            try:
+                driver.quit()
+            except:
+                pass
         
         # 去重
         unique_news = []
