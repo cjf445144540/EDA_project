@@ -220,7 +220,7 @@ def copy_to_clipboard(content, title, source=""):
     :param source: 新闻来源（如"同花顺"、"广立微官网"等）
     """
     # 超过5000字时截断
-    MAX_CONTENT_LEN = 5000
+    MAX_CONTENT_LEN = 10000
     if content and len(content) > MAX_CONTENT_LEN:
         content = content[:MAX_CONTENT_LEN]
 

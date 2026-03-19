@@ -166,60 +166,73 @@ class SynopsysNewsCrawler:
             else:
                 url = f"{base_url}?p={page}&search_in=synopsys"
             
-            try:
-                response = requests.get(url, headers=self.headers, timeout=15, verify=False, proxies={'http': None, 'https': None})
-                response.encoding = 'utf-8'
-                
-                if response.status_code != 200:
-                    break
-                
-                soup = BeautifulSoup(response.text, 'html.parser')
-                
-                # 查找所有新闻链接
-                news_links = soup.select('a[href*="/news/202"]')
-                
-                if not news_links:
-                    break
-                
-                for link_elem in news_links:
-                    href = link_elem.get('href', '')
-                    if not href or '/news/202' not in href:
-                        continue
+            # 添加重试机制
+            max_retries = 3
+            success = False
+            for retry in range(max_retries):
+                try:
+                    response = requests.get(url, headers=self.headers, timeout=20, verify=False, proxies={'http': None, 'https': None})
+                    response.encoding = 'utf-8'
                     
-                    # 获取标题
-                    title_span = link_elem.select_one('span')
-                    if not title_span:
-                        continue
-                    title = title_span.get_text(strip=True)
+                    if response.status_code != 200:
+                        break
                     
-                    # 获取日期
-                    date_elem = link_elem.select_one('i')
-                    date = ''
-                    if date_elem:
-                        date = self._parse_designreuse_date(date_elem.get_text())
+                    soup = BeautifulSoup(response.text, 'html.parser')
                     
-                    # 构建完整链接
-                    if href.startswith('/'):
-                        full_url = f"https://www.design-reuse.com{href}"
-                    else:
-                        full_url = href
+                    # 查找所有新闻链接
+                    news_links = soup.select('a[href*="/news/202"]')
                     
-                    # 避免重复
-                    if any(n['link'] == full_url for n in news_list):
-                        continue
+                    if not news_links:
+                        break
                     
-                    if date and date >= cutoff_date:
-                        news_list.append({
-                            'title': title,
-                            'link': full_url,
-                            'date': date,
-                            'source': 'Design-Reuse'
-                        })
-                    elif date and date < cutoff_date:
-                        return news_list
+                    for link_elem in news_links:
+                        href = link_elem.get('href', '')
+                        if not href or '/news/202' not in href:
+                            continue
                         
-            except Exception as e:
-                print(f"  爬取 Design-Reuse 第 {page+1} 页出错: {e}")
+                        # 获取标题
+                        title_span = link_elem.select_one('span')
+                        if not title_span:
+                            continue
+                        title = title_span.get_text(strip=True)
+                        
+                        # 获取日期
+                        date_elem = link_elem.select_one('i')
+                        date = ''
+                        if date_elem:
+                            date = self._parse_designreuse_date(date_elem.get_text())
+                        
+                        # 构建完整链接
+                        if href.startswith('/'):
+                            full_url = f"https://www.design-reuse.com{href}"
+                        else:
+                            full_url = href
+                        
+                        # 避免重复
+                        if any(n['link'] == full_url for n in news_list):
+                            continue
+                        
+                        if date and date >= cutoff_date:
+                            news_list.append({
+                                'title': title,
+                                'link': full_url,
+                                'date': date,
+                                'source': 'Design-Reuse'
+                            })
+                        elif date and date < cutoff_date:
+                            return news_list
+                    
+                    success = True
+                    break  # 成功则退出重试循环
+                    
+                except Exception as e:
+                    if retry < max_retries - 1:
+                        import time
+                        time.sleep(2)  # 重试前等待
+                    else:
+                        print(f"  爬取 Design-Reuse 第 {page+1} 页出错: {e}")
+            
+            if not success:
                 break
         
         return news_list

@@ -18,6 +18,13 @@ from datetime import datetime, timedelta
 
 
 # ========================================
+# 全局配置（统一修改所有爬虫的默认值）
+# ========================================
+DEFAULT_DAYS = 7        # 默认爬取最近几天的新闻
+DEFAULT_MAX_PAGES = 1   # 默认最大爬取页数
+
+
+# ========================================
 # 公司名称映射
 # ========================================
 COMPANY_NAMES = {
@@ -56,124 +63,124 @@ THS_CONFIG = {
         "688206",  # 概伦电子
         "301095"   # 广立微
     ],
-    'days': 7,  # 最近几天
+    'days': DEFAULT_DAYS,
 }
 
 # 广立微官网新闻配置
 SEMITRONIX_CONFIG = {
     'enabled': True,  # 是否启用
-    'max_pages': 1,  # 最大爬取页数
-    'days': 7,        # 只保留最近7天的新闻
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
 }
 
 # 概伦电子官网新闻配置
 PRIMARIUS_CONFIG = {
     'enabled': True,  # 是否启用
-    'max_pages': 1,   # 最大爬取页数（只有1页）
-    'days': 7,        # 只保留最近7天的新闻
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
 }
 
 # 合见工软官网新闻配置
 UNIVISTA_CONFIG = {
     'enabled': True,  # 是否启用
-    'max_pages': 1,   # 最大爬取页数
-    'days': 7,        # 只保留最近7天的新闻
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
 }
 
 # 芯华章官网新闻配置
 XEPIC_CONFIG = {
     'enabled': True,  # 是否启用
-    'max_pages': 1,   # 最大爬取页数
-    'days': 7,        # 只保留最近7天的新闻
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
 }
 
 # 深圳电子商会新闻配置
 SECCW_CONFIG = {
-    'enabled': True,  # 暂时禁用（网站不可访问）
-    'max_pages': 1,   # 最大爬取页数
-    'days': 7,        # 只保留最近7天的新闻
-    'keyword': 'EDA', # 搜索关键词
+    'enabled': True,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+    'keyword': 'EDA',
 }
 
 # 全球半导体观察新闻配置
 DRAMX_CONFIG = {
     'enabled': True,  # 是否启用
-    'max_pages': 1,   # 最大爬取页数
-    'days': 7,        # 只保留最近7天的新闻
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
 }
 
 # Synopsys 新闻配置
 SYNOPSYS_CONFIG = {
     'enabled': True,  # 是否启用
-    'max_pages': 1,   # 每个来源最大爬取页数
-    'days': 7,        # 只保留最近几天的新闻
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
 }
 
 # Cadence 新闻配置
 CADENCE_CONFIG = {
     'enabled': True,  # 是否启用
-    'max_pages': 1,   # 每个来源最大爬取页数
-    'days': 7,        # 只保留最近几天的新闻
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
 }
 
 # Siemens 新闻配置
 SIEMENS_CONFIG = {
     'enabled': True,  # 是否启用
-    'max_pages': 1,   # 每个来源最大爬取页数
-    'days': 7,        # 只保留最近几天的新闻
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
 }
 
 # EETimes 新闻配置
 EETIMES_CONFIG = {
-    'enabled': True,   # 已启用
-    'max_pages': 1,   # 最大爬取页数
-    'days': 7,        # 只保留最近几天的新闻
-    'keywords': ['synopsys', 'cadence', 'siemens', 'EDA'],  # 搜索关键词列表
+    'enabled': True,   # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+    'keywords': ['synopsys', 'cadence', 'siemens', 'EDA'],
 }
 
 # 思尔芯 新闻配置
 S2C_CONFIG = {
     'enabled': True,  # 是否启用
-    'max_pages': 1,  # 最大爬取页数
-    'days': 7,       # 只保留最近7天的新闻
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
 }
 
 # 鸿芯微纳 新闻配置
 GIGADA_CONFIG = {
     'enabled': True,  # 是否启用
-    'max_pages': 1,   # 最大爬取页数
-    'days': 7,        # 只保留最近7天的新闻
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
 }
 
 # 芯和半导体 新闻配置
 XPEEDIC_CONFIG = {
     'enabled': True,  # 是否启用
-    'max_pages': 1,   # 最大爬取页数
-    'days': 7,        # 只保留最近7天的新闻
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
 }
 
 # 新浪网 新闻配置
 SINA_CONFIG = {
     'enabled': True,  # 是否启用
-    'max_pages': 1,   # 最大爬取页数
-    'days': 7,        # 只保留最近7天的新闻
-    'keyword': 'EDA', # 搜索关键词
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+    'keyword': 'EDA',
 }
 
 # 腾讯网 新闻配置
 QQ_CONFIG = {
     'enabled': True,  # 是否启用
-    'max_pages': 1,   # 最大爬取页数
-    'days': 7,        # 只保留最近7天的新闻
-    'keyword': 'EDA', # 搜索关键词
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+    'keyword': 'EDA',
 }
 
 # 搜狐网 新闻配置
 SOHU_CONFIG = {
     'enabled': True,  # 是否启用
-    'max_pages': 1,   # 最大爬取页数
-    'days': 7,        # 只保留最近7天的新闻
-    'keyword': 'EDA', # 搜索关键词
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+    'keyword': 'EDA',
 }
 
 # 未来可以继续添加其他爬虫配置...
@@ -1172,7 +1179,7 @@ def main():
             content_len = item['content_len']
             
             # 过滤掉字数少于100的新闻
-            if content_len < 100:
+            if content_len < 200:
                 continue
             
             if company_name not in news_by_company:
