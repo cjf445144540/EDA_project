@@ -12,6 +12,9 @@ from .eetimes_news_crawler import EETimesNewsCrawler
 from .sohu_news_crawler import SohuNewsCrawler
 from .sina_news_crawler import SinaNewsCrawler
 from .qq_news_crawler import QQNewsCrawler
+from .eechina_news_crawler import EEChinaNewsCrawler
+from .eetchina_news_crawler import EETChinaNewsCrawler
+from .eeworld_news_crawler import EEWorldNewsCrawler
 
 # 公司官网爬虫（从 official 子目录导入）
 from .official import (
@@ -36,6 +39,9 @@ __all__ = [
     'SohuNewsCrawler',
     'SinaNewsCrawler',
     'QQNewsCrawler',
+    'EEChinaNewsCrawler',
+    'EETChinaNewsCrawler',
+    'EEWorldNewsCrawler',
     # 公司官网
     'SemitronixNewsCrawler',
     'PrimariusNewsCrawler',

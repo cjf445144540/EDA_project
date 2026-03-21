@@ -53,13 +53,14 @@ class NewsClassifier:
         :param title: 新闻标题
         :return: 分类名称
         """
+        title_lower = title.lower()  # 转小写进行匹配
         # 遍历所有分类
         for category, keywords in self.categories.items():
             if category == "其他新闻":
                 continue
-            # 检查标题是否包含该分类的关键词
+            # 检查标题是否包含该分类的关键词（不区分大小写）
             for keyword in keywords:
-                if keyword in title:
+                if keyword.lower() in title_lower:
                     return category
         
         # 如果没有匹配到任何分类，归为"其他新闻"

@@ -7,13 +7,35 @@
 - 未来可继续添加其他爬虫...
 """
 
-from crawlers import THSNewsCrawler, SemitronixNewsCrawler, PrimariusNewsCrawler, UnivistiaNewsCrawler, XepicNewsCrawler, SeccwNewsCrawler, DramxNewsCrawler, SynopsysNewsCrawler, CadenceNewsCrawler, SiemensNewsCrawler, EETimesNewsCrawler, S2CNewsCrawler, GigaDANewsCrawler, XpedicNewsCrawler, SinaNewsCrawler, QQNewsCrawler, SohuNewsCrawler
+import os
+import sys
+import logging
+
+# 静默模式：减少日志输出，只显示关键信息
+QUIET_MODE = False  # 关闭静默模式，保留爬取日志
+
+# 抑制webdriver_manager的警告日志
+os.environ['WDM_LOG'] = '0'
+os.environ['WDM_LOG_LEVEL'] = '0'
+os.environ['WDM_LOCAL'] = '1'  # 优先使用本地缓存，不检查更新
+os.environ['WDM_SSL_VERIFY'] = '0'
+for _name in ['WDM', 'webdriver_manager', 'webdriver_manager.core', 'urllib3']:
+    logging.getLogger(_name).setLevel(logging.CRITICAL)
+    logging.getLogger(_name).propagate = False
+    logging.getLogger(_name).disabled = True
+
+# 静默模式下的日志函数
+def log(msg, force=False):
+    """输出日志，静默模式下只输出force=True的内容"""
+    if not QUIET_MODE or force:
+        print(msg)
+
+from crawlers import THSNewsCrawler, SemitronixNewsCrawler, PrimariusNewsCrawler, UnivistiaNewsCrawler, XepicNewsCrawler, SeccwNewsCrawler, DramxNewsCrawler, SynopsysNewsCrawler, CadenceNewsCrawler, SiemensNewsCrawler, EETimesNewsCrawler, S2CNewsCrawler, GigaDANewsCrawler, XpedicNewsCrawler, SinaNewsCrawler, QQNewsCrawler, SohuNewsCrawler, EEChinaNewsCrawler, EETChinaNewsCrawler, EEWorldNewsCrawler
 from classify_news import NewsClassifier
 from auto_news_writer import get_first_news_link, fetch_news_content, copy_to_clipboard
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import pyperclip
 import json
-import os
 from datetime import datetime, timedelta
 
 
@@ -49,6 +71,9 @@ COMPANY_NAMES = {
     "sina": "行业新闻",  # 新浪网
     "qq": "行业新闻",  # 腾讯网
     "sohu": "行业新闻",  # 搜狐网
+    "eechina": "行业新闻",  # 电子工程网
+    "eetchina": "行业新闻",  # 电子工程专辑
+    "eeworld": "行业新闻",  # 电子工程世界
 }
 
 # ========================================
@@ -180,6 +205,30 @@ SOHU_CONFIG = {
     'enabled': True,  # 是否启用
     'max_pages': DEFAULT_MAX_PAGES,
     'days': DEFAULT_DAYS,
+    'keyword': 'EDA',
+}
+
+# 电子工程网 新闻配置
+EECHINA_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': 3,   # 最大爬取页数（有WAF，不宜太快）
+    'days': 30,       # 爬取最近30天的新闻
+    'keyword': 'EDA',
+}
+
+# 电子工程专辑（eet-china.com）
+EETCHINA_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': 10,  # 最大爬取页数
+    'days': 90,       # 爬取最近90天的新闻（三个月）
+    'keyword': 'eda',
+}
+
+# 电子工程世界（eeworld.com.cn）
+EEWORLD_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': 10,  # 最大爬取页数
+    'days': 30,       # 爬取最近30天的新闻（一个月）
     'keyword': 'EDA',
 }
 
@@ -838,6 +887,105 @@ def run_sohu_crawler(config):
         return {}
 
 
+def run_eechina_crawler(config):
+    """运行电子工程网新闻爬虫"""
+    if not config.get('enabled', False):
+        return {}
+
+    print("\n" + "="*50)
+    print("电子工程网新闻爬虫")
+    print("="*50)
+
+    max_pages = config.get('max_pages', 3)
+    days = config.get('days', 30)
+    keyword = config.get('keyword', 'EDA')
+
+    try:
+        crawler = EEChinaNewsCrawler(keyword=keyword)
+        news_list = crawler.crawl(max_pages=max_pages, days=days)
+        crawler.save_to_json(news_list)
+
+        result = {}
+        if news_list:
+            result['eechina'] = {
+                'source': '电子工程网',
+                'count': len(news_list),
+                'news': news_list
+            }
+
+        print(f"✅ 电子工程网 爬取完成，获取 {len(news_list)} 条新闻（最近{days}天）")
+        return result
+    except Exception as e:
+        print(f"❌ 电子工程网 爬取失败: {e}")
+        return {}
+
+
+def run_eetchina_crawler(config):
+    """运行电子工程专辑新闻爬虫"""
+    if not config.get('enabled', False):
+        return {}
+
+    print("\n" + "="*50)
+    print("电子工程专辑新闻爬虫")
+    print("="*50)
+
+    max_pages = config.get('max_pages', 10)
+    days = config.get('days', 90)
+    keyword = config.get('keyword', 'eda')
+
+    try:
+        crawler = EETChinaNewsCrawler(keyword=keyword)
+        news_list = crawler.crawl(max_pages=max_pages, days=days)
+        crawler.save_to_json(news_list)
+
+        result = {}
+        if news_list:
+            result['eetchina'] = {
+                'source': '电子工程专辑',
+                'count': len(news_list),
+                'news': news_list
+            }
+
+        print(f"✅ 电子工程专辑 爬取完成，获取 {len(news_list)} 条新闻（最近{days}天）")
+        return result
+    except Exception as e:
+        print(f"❌ 电子工程专辑 爬取失败: {e}")
+        return {}
+
+
+def run_eeworld_crawler(config):
+    """运行电子工程世界新闻爬虫"""
+    if not config.get('enabled', False):
+        return {}
+
+    print("\n" + "="*50)
+    print("电子工程世界新闻爬虫")
+    print("="*50)
+
+    max_pages = config.get('max_pages', 10)
+    days = config.get('days', 30)
+    keyword = config.get('keyword', 'EDA')
+
+    try:
+        crawler = EEWorldNewsCrawler(keyword=keyword)
+        news_list = crawler.crawl(max_pages=max_pages, days=days)
+        crawler.save_to_json(news_list)
+
+        result = {}
+        if news_list:
+            result['eeworld'] = {
+                'source': '电子工程世界',
+                'count': len(news_list),
+                'news': news_list
+            }
+
+        print(f"✅ 电子工程世界 爬取完成，获取 {len(news_list)} 条新闻（最近{days}天）")
+        return result
+    except Exception as e:
+        print(f"❌ 电子工程世界 爬取失败: {e}")
+        return {}
+
+
 def convert_to_new_format(raw_results):
     """
     将爬取结果转换为新格式：
@@ -867,6 +1015,12 @@ def convert_to_new_format(raw_results):
             company_name = "行业新闻"
         elif key == 'sohu':
             company_name = "行业新闻"
+        elif key == 'eechina':
+            company_name = "行业新闻"
+        elif key == 'eetchina':
+            company_name = "行业新闻"
+        elif key == 'eeworld':
+            company_name = "行业新闻"
         else:
             company_name = COMPANY_NAMES.get(key, key)
         source = data.get('source', '未知来源')
@@ -892,9 +1046,45 @@ def convert_to_new_format(raw_results):
 
 
 def main():
-    print("\n" + "#"*60)
-    print("#" + " "*20 + "统一新闻爬取系统" + " "*19 + "#")
-    print("#"*60)
+    # 静默模式下重定向子模块的stdout
+    import io
+    class QuietStream:
+        """静默模式下的输出流，过滤掉不重要的日志"""
+        def __init__(self, original):
+            self.original = original
+        def write(self, msg):
+            if not QUIET_MODE:
+                self.original.write(msg)
+                return
+            # 过滤掉中间日志（以空格开头或包含特定模式的行）
+            if not msg or msg == '\n':
+                self.original.write(msg)
+                return
+            # 保留重要输出
+            keep_patterns = ['汇总', '统计', '分类', '去重', '保存', '选择', 
+                           '提示词', '剪贴板', '结果', '摘要', '示例',
+                           '【', '】', '链接:', '总新闻数', '来源统计']
+            if any(p in msg for p in keep_patterns):
+                self.original.write(msg)
+                return
+            # 过滤掉详细日志
+            skip_patterns = ['正在爬取', '正在启动', '第 ', '页:', '共获取', 
+                           '正在获取新闻内容', '日期限制', 'Chrome', 'driver',
+                           'Playwright', '切换到', '条新闻', '加载', 'Selenium',
+                           '正在处理', '获取内容', '✅', '❌', '新闻爬虫',
+                           '完成 (', '失败:', '[', ']']
+            if any(p in msg for p in skip_patterns):
+                return
+            self.original.write(msg)
+        def flush(self):
+            self.original.flush()
+    
+    if QUIET_MODE:
+        sys.stdout = QuietStream(sys.__stdout__)
+    
+    log("\n" + "#"*60)
+    log("#" + " "*20 + "统一新闻爬取系统" + " "*19 + "#")
+    log("#"*60)
     
     # ======== 清理旧的输出文件 ========
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -907,7 +1097,7 @@ def main():
             filepath = os.path.join(json_dir, filename)
             if os.path.isfile(filepath):
                 os.remove(filepath)
-        print("✅ 已清理 json 目录下的旧文件")
+        log("✅ 已清理 json 目录下的旧文件")
     
     # 清理 result 目录
     if os.path.exists(result_dir):
@@ -915,12 +1105,12 @@ def main():
             filepath = os.path.join(result_dir, filename)
             if os.path.isfile(filepath):
                 os.remove(filepath)
-        print("✅ 已清理 result 目录下的旧文件")
+        log("✅ 已清理 result 目录下的旧文件")
     
     all_results = {}
     
     # ======== 并行运行所有爬虫 ========
-    print("\n开始并行爬取新闻...")
+    log("\n开始并行爬取新闻...")
     
     # 定义所有爬虫任务
     crawler_tasks = [
@@ -939,8 +1129,16 @@ def main():
         ("鸿芯微纳", run_gigada_crawler, GIGADA_CONFIG),
         ("芯和半导体", run_xpeedic_crawler, XPEEDIC_CONFIG),
         ("新浪网", run_sina_crawler, SINA_CONFIG),
+        # 以下使用Selenium的爬虫，会顺序执行
+    ]
+    
+    # Selenium爬虫（不能并行，单独顺序执行）
+    selenium_tasks = [
         ("腾讯网", run_qq_crawler, QQ_CONFIG),
         ("搜狐网", run_sohu_crawler, SOHU_CONFIG),
+        ("电子工程网", run_eechina_crawler, EECHINA_CONFIG),
+        ("电子工程专辑", run_eetchina_crawler, EETCHINA_CONFIG),
+        ("电子工程世界", run_eeworld_crawler, EEWORLD_CONFIG),
     ]
     
     # 过滤已启用的爬虫
@@ -972,12 +1170,130 @@ def main():
                                     news_count += vv
                         elif isinstance(v, list):
                             news_count += len(v)
-                print(f"  [{completed_count}/{len(enabled_tasks)}] {name} 完成 ({news_count}条)")
+                log(f"  [{completed_count}/{len(enabled_tasks)}] {name} 完成 ({news_count}条)")
             except Exception as e:
-                print(f"  [{completed_count}/{len(enabled_tasks)}] {name} 失败: {e}")
+                log(f"  [{completed_count}/{len(enabled_tasks)}] {name} 失败: {e}")
     
     elapsed = time.time() - start_time
-    print(f"\n爬取完成，耗时 {elapsed:.1f} 秒")
+    log(f"\n爬取完成，耗时 {elapsed:.1f} 秒")
+    
+    # 顺序执行Selenium爬虫（使用共享driver）
+    selenium_enabled = [(name, func, config) for name, func, config in selenium_tasks if config.get('enabled', False)]
+    shared_driver = None  # 共享driver，后续内容获取也使用
+    
+    if selenium_enabled:
+        log("\n" + "-"*40)
+        log("开始执行Selenium爬虫（共享driver）...")
+        log("-"*40)
+        
+        # 创建共享driver
+        try:
+            from selenium import webdriver
+            from selenium.webdriver.chrome.options import Options
+            from selenium.webdriver.chrome.service import Service
+            from webdriver_manager.chrome import ChromeDriverManager
+            
+            chrome_options = Options()
+            chrome_options.add_argument('--headless=new')
+            chrome_options.add_argument('--disable-gpu')
+            chrome_options.add_argument('--no-sandbox')
+            chrome_options.add_argument('--disable-dev-shm-usage')
+            chrome_options.add_argument('--disable-extensions')
+            chrome_options.add_argument('--disable-logging')
+            chrome_options.add_argument('--log-level=3')
+            # SSL和安全相关选项（解决网络连接问题）
+            chrome_options.add_argument('--ignore-certificate-errors')
+            chrome_options.add_argument('--ignore-ssl-errors')
+            chrome_options.add_argument('--allow-insecure-localhost')
+            chrome_options.add_argument('--disable-web-security')
+            chrome_options.add_argument('--disable-features=IsolateOrigins,site-per-process')
+            # 完整的User-Agent和反检测选项
+            chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+            chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+            chrome_options.add_experimental_option('excludeSwitches', ['enable-logging', 'enable-automation'])
+            chrome_options.add_experimental_option('useAutomationExtension', False)
+            
+            # 在OS层面抑制webdriver_manager警告
+            import os as _os
+            _orig_stdout_fd = _os.dup(1)
+            _orig_stderr_fd = _os.dup(2)
+            _devnull_fd = _os.open(_os.devnull, _os.O_WRONLY)
+            _os.dup2(_devnull_fd, 1)
+            _os.dup2(_devnull_fd, 2)
+            _old_stdout, _old_stderr = sys.stdout, sys.stderr
+            sys.stdout = sys.stderr = open(_os.devnull, 'w')
+            
+            try:
+                try:
+                    shared_driver = webdriver.Chrome(options=chrome_options)
+                except Exception:
+                    service = Service(ChromeDriverManager().install())
+                    shared_driver = webdriver.Chrome(service=service, options=chrome_options)
+            finally:
+                # 恢复stdout/stderr
+                _os.dup2(_orig_stdout_fd, 1)
+                _os.dup2(_orig_stderr_fd, 2)
+                _os.close(_orig_stdout_fd)
+                _os.close(_orig_stderr_fd)
+                _os.close(_devnull_fd)
+                sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
+            
+            shared_driver.set_page_load_timeout(30)
+            log("  Chrome共享driver已启动")
+            
+            # 直接调用爬虫类（使用共享driver）
+            for name, func, config in selenium_enabled:
+                try:
+                    # 每个爬虫执行前重置driver状态
+                    try:
+                        shared_driver.delete_all_cookies()
+                        shared_driver.get('about:blank')  # 重置到空白页
+                        import time as time_mod
+                        time_mod.sleep(1)
+                    except:
+                        pass
+                    
+                    keyword = config.get('keyword', 'EDA')
+                    max_pages = config.get('max_pages', 10)
+                    days = config.get('days', 30)
+                    
+                    if name == "电子工程网":
+                        crawler = EEChinaNewsCrawler(keyword=keyword)
+                        news_list = crawler.crawl(max_pages=max_pages, days=days, shared_driver=shared_driver)
+                        crawler.save_to_json(news_list)
+                        result = {'eechina': {'source': '电子工程网', 'news': news_list, 'count': len(news_list)}} if news_list else {}
+                    elif name == "电子工程专辑":
+                        crawler = EETChinaNewsCrawler(keyword=keyword)
+                        news_list = crawler.crawl(max_pages=max_pages, days=days, shared_driver=shared_driver)
+                        crawler.save_to_json(news_list)
+                        result = {'eetchina': {'source': '电子工程专辑', 'news': news_list, 'count': len(news_list)}} if news_list else {}
+                    elif name == "电子工程世界":
+                        crawler = EEWorldNewsCrawler(keyword=keyword)
+                        news_list = crawler.crawl(max_pages=max_pages, days=days, shared_driver=shared_driver)
+                        crawler.save_to_json(news_list)
+                        result = {'eeworld': {'source': '电子工程世界', 'news': news_list, 'count': len(news_list)}} if news_list else {}
+                    elif name in ["腾讯网", "搜狐网"]:
+                        # 腾讯和搜狐暂不支持shared_driver，直接调用原函数
+                        result = func(config)
+                    else:
+                        result = {}
+                    
+                    all_results.update(result)
+                    news_count = sum(v.get('count', 0) if isinstance(v, dict) else 0 for v in result.values())
+                    log(f"  {name} 完成 ({news_count}条)")
+                except Exception as e:
+                    log(f"  {name} 失败: {e}")
+        except Exception as e:
+            log(f"  共享driver创建失败: {e}")
+            # 回退到原方式
+            for name, func, config in selenium_enabled:
+                try:
+                    result = func(config)
+                    all_results.update(result)
+                    news_count = sum(v.get('count', 0) if isinstance(v, dict) else 0 for v in result.values())
+                    log(f"  {name} 完成 ({news_count}条)")
+                except Exception as e:
+                    log(f"  {name} 失败: {e}")
     
     # ======== 保存汇总结果 ========
     if all_results:
@@ -994,34 +1310,37 @@ def main():
         print(f"所有爬虫任务完成！汇总数据已保存至: {output_file}")
         print("="*50)
         
-        # 统计汇总
+        # 统计汇总（已屏蔽）
         total_news = sum(data.get('count', 0) for data in all_results.values())
-        print(f"\n汇总统计: 共爬取 {total_news} 条新闻")
-        for company, sources in formatted_results.items():
-            company_total = sum(len(news_list) for news_list in sources.values())
-            print(f"  - {company}: {company_total} 条")
-            for source, news_list in sources.items():
-                print(f"      · {source}: {len(news_list)} 条")
     
     # ======== 自动执行分类 ========
     if all_results:
         # 使用转换后的格式进行分类
         formatted_results = convert_to_new_format(all_results)
         
-        print("\n" + "="*50)
-        print("开始自动分类新闻...")
+        # 统计爬取总数
+        crawl_total = sum(len(news_list) for sources in formatted_results.values() for news_list in sources.values())
+        
+        print("\n开始自动分类新闻...")
         print("="*50)
+        print(f"【Step 1】爬取完成: {crawl_total} 条")
         
         # 创建分类器
         classifier = NewsClassifier()
         target_categories = ["财务相关", "战略合作", "技术研发", "行业分析"]
         skip_sources = ["EETimes"]  # EETimes已用synopsys/cadence/siemens搜索，直接保留
-        category_only_sources = ["广立微官网", "概伦电子官网", "合见工软官网", "芯华章官网", "深圳电子商会", "全球半导体观察", "思尔芯官网", "鸿芯微纳官网", "芯和半导体官网", "新浪网", "腾讯网", "搜狐网"]  # 公司官网和行业新闻只做分类筛选，不限公司相关
+        category_only_sources = ["广立微官网", "概伦电子官网", "合见工软官网", "芯华章官网", "深圳电子商会", "全球半导体观察", "思尔芯官网", "鸿芯微纳官网", "芯和半导体官网", "新浪网", "腾讯网", "搜狐网", "电子工程网", "电子工程专辑", "电子工程世界"]  # 公司官网和行业新闻只做分类筛选，不限公司相关
         company_only_sources = ["SemiWiki", "Design-Reuse", "Synopsys官网", "Cadence官网", "Siemens官网"]  # 只做公司相关筛选，不做分类筛选
         
-        print(f"过滤规则: 同花顺新闻筛选 {', '.join(target_categories)} 四类 + 公司直接相关")
-        print(f"         公司官网/行业新闻筛选 {', '.join(target_categories)} 四类（不限公司相关）")
-        print(f"         Synopsys 新闻只筛选公司相关（不做分类筛选）\n")
+        print(f"\n过滤规则:")
+        print(f"  · 同花顺: {', '.join(target_categories)} 四类 + 公司直接相关")
+        print(f"  · 公司官网: {', '.join(target_categories)} 四类（不限公司相关）")
+        print(f"    [{', '.join([s for s in category_only_sources if '官网' in s])}]")
+        print(f"  · 行业新闻: {', '.join(target_categories)} 四类（不限公司相关）")
+        print(f"    [{', '.join([s for s in category_only_sources if '官网' not in s])}]")
+        print(f"  · 第三方新闻: 只筛选公司相关（不做分类筛选）")
+        print(f"    [{', '.join(company_only_sources)}]")
+        print(f"  · 跳过筛选: [{', '.join(skip_sources)}]")
         
         # 执行分类（两层筛选）- 使用转换后的格式
         classified_results = classifier.classify_batch(
@@ -1032,6 +1351,10 @@ def main():
             category_only_sources=category_only_sources,
             company_only_sources=company_only_sources
         )
+        
+        # 统计分类筛选后数量
+        classify_total = sum(len(news_list) for sources in classified_results.values() for news_list in sources.values())
+        print(f"\n【Step 2】分类筛选: {crawl_total} 条 → {classify_total} 条（过滤 {crawl_total - classify_total} 条）")
         
         # 按日期排序（最新的优先）
         for company_name in classified_results:
@@ -1053,38 +1376,18 @@ def main():
                         unique_news.append(news)
                 classified_results[company_name][source_name] = unique_news
         total_after = sum(len(news_list) for sources in classified_results.values() for news_list in sources.values())
-        if total_before > total_after:
-            print(f"\n去重: {total_before} 条 → {total_after} 条（去掉 {total_before - total_after} 条重复标题）")
+        print(f"【Step 3】标题去重: {total_before} 条 → {total_after} 条（去掉 {total_before - total_after} 条重复）")
+        print(f"\n最终结果: {total_after} 条新闻")
+        print("="*50)
         
         # 保存分类结果
         classifier.save_classified_results(classified_results)
         
-        # 打印统计摘要
-        if classified_results:
-            classifier.print_summary(classified_results)
-            
-            # 打印详细分类结果示例
-            print("\n" + "="*60)
-            print("详细分类示例 (仅显示前3条)")
-            print("="*60)
-            
-            for company_name, sources in classified_results.items():
-                print(f"\n【{company_name}】")
-                for source_name, news_list in sources.items():
-                    if news_list:
-                        print(f"\n  [{source_name}] ({len(news_list)}条)")
-                        for i, news in enumerate(news_list[:3], 1):
-                            print(f"    {i}. {news['title']}")
-                            print(f"       链接: {news['link']}")
-                        if len(news_list) > 3:
-                            print(f"    ... 还有 {len(news_list) - 3} 条")
-        else:
+        # 统计摘要和详细示例已屏蔽
+        if not classified_results:
             print("\n⚠️  警告: 所有股票的新闻都被过滤掉了，没有符合条件的新闻")
         
-    # ======== 自动运行 Writer 脚本 ========
-    print("\n" + "="*50)
-    print("请从上方列表中选择一条新闻生成新闻稿")
-    print("="*50)
+    # ======== 结束 ========
         
     # 显示所有新闻链接供用户选择（树状结构）
     all_news = []
@@ -1160,26 +1463,244 @@ def main():
             except Exception as e:
                 return {**item, 'content': None, 'content_len': 0}
         
-        # 使用线程池并行获取
-        results = []
-        total = len(all_news_items)
-        completed = 0
+        # Selenium来源需要顺序获取内容
+        selenium_sources = ["电子工程网", "电子工程专辑", "电子工程世界"]
         
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = {executor.submit(fetch_single_news, item): item for item in all_news_items}
-            for future in as_completed(futures):
-                completed += 1
-                print(f"  正在检查新闻内容... ({completed}/{total})", end="\r")
-                results.append(future.result())
+        # 分离普通来源和Selenium来源
+        normal_items = [item for item in all_news_items if item['source'] not in selenium_sources]
+        selenium_items = [item for item in all_news_items if item['source'] in selenium_sources]
+        
+        # 显示内容获取统计
+        total_items = len(all_news_items)
+        print(f"  总计: {total_items} 条新闻")
+        print(f"    · 普通来源: {len(normal_items)} 条（并行获取）")
+        print(f"    · Selenium来源: {len(selenium_items)} 条（顺序获取）")
+        
+        # 使用线程池并行获取普通来源
+        results = []
+        total = len(normal_items)
+        completed = 0
+        success_count = 0
+        fail_count = 0
+        
+        if normal_items:
+            print(f"\n  正在并行获取普通来源（10线程）...")
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                futures = {executor.submit(fetch_single_news, item): item for item in normal_items}
+                for future in as_completed(futures):
+                    completed += 1
+                    result = future.result()
+                    results.append(result)
+                    content_len = result.get('content_len', 0)
+                    source = result.get('source', '-')
+                    if content_len > 0:
+                        success_count += 1
+                    else:
+                        fail_count += 1
+                    # 显示进度和当前结果
+                    status = f"✓{content_len}字" if content_len > 0 else "✗无内容"
+                    print(f"  [{completed}/{total}] {source}: {status}    ", end="\r")
+            print(f"\n  普通来源完成: {success_count}条成功, {fail_count}条无内容")
+        
+        # 顺序获取Selenium来源的内容（复用共享driver）
+        if selenium_items:
+            print(f"\n  顺序获取Selenium来源内容 ({len(selenium_items)}条)...")
+            
+            from bs4 import BeautifulSoup
+            import time as time_module
+            
+            # 复用共享driver或创建新driver
+            driver_to_use = shared_driver
+            created_new_driver = False
+            
+            if driver_to_use is None:
+                # 没有共享driver，创建新的
+                try:
+                    from selenium import webdriver
+                    from selenium.webdriver.chrome.options import Options
+                    from selenium.webdriver.chrome.service import Service
+                    from webdriver_manager.chrome import ChromeDriverManager
+                    
+                    chrome_options = Options()
+                    chrome_options.add_argument('--headless=new')
+                    chrome_options.add_argument('--disable-gpu')
+                    chrome_options.add_argument('--no-sandbox')
+                    chrome_options.add_argument('--disable-dev-shm-usage')
+                    chrome_options.add_argument('--disable-extensions')
+                    chrome_options.add_argument('--disable-logging')
+                    chrome_options.add_argument('--log-level=3')
+                    # SSL和安全相关选项
+                    chrome_options.add_argument('--ignore-certificate-errors')
+                    chrome_options.add_argument('--ignore-ssl-errors')
+                    chrome_options.add_argument('--allow-insecure-localhost')
+                    chrome_options.add_argument('--disable-web-security')
+                    chrome_options.add_argument('--disable-features=IsolateOrigins,site-per-process')
+                    chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+                    chrome_options.add_experimental_option('excludeSwitches', ['enable-logging', 'enable-automation'])
+                    
+                    # 在OS层面抑制webdriver_manager警告
+                    import os as _os
+                    _orig_stdout_fd = _os.dup(1)
+                    _orig_stderr_fd = _os.dup(2)
+                    _devnull_fd = _os.open(_os.devnull, _os.O_WRONLY)
+                    _os.dup2(_devnull_fd, 1)
+                    _os.dup2(_devnull_fd, 2)
+                    _old_stdout, _old_stderr = sys.stdout, sys.stderr
+                    sys.stdout = sys.stderr = open(_os.devnull, 'w')
+                    
+                    try:
+                        try:
+                            driver_to_use = webdriver.Chrome(options=chrome_options)
+                        except Exception:
+                            service = Service(ChromeDriverManager().install())
+                            driver_to_use = webdriver.Chrome(service=service, options=chrome_options)
+                    finally:
+                        _os.dup2(_orig_stdout_fd, 1)
+                        _os.dup2(_orig_stderr_fd, 2)
+                        _os.close(_orig_stdout_fd)
+                        _os.close(_orig_stderr_fd)
+                        _os.close(_devnull_fd)
+                        sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
+                    
+                    driver_to_use.set_page_load_timeout(30)
+                    created_new_driver = True
+                except Exception as e:
+                    print(f"\n  Selenium初始化失败: {e}")
+                    for item in selenium_items:
+                        results.append({**item, 'content': '', 'content_len': 0})
+                    driver_to_use = None
+            
+            if driver_to_use:
+                def fetch_with_driver(url, source_name):
+                    """使用driver获取内容"""
+                    try:
+                        # 每次获取前重置状态
+                        try:
+                            driver_to_use.delete_all_cookies()
+                        except:
+                            pass
+                        
+                        driver_to_use.get(url)
+                        time_module.sleep(3)  # 增加等待时间
+                        soup = BeautifulSoup(driver_to_use.page_source, 'html.parser')
+                        
+                        # 根据来源选择不同的选择器
+                        if source_name == "电子工程网":
+                            # 优先找postmessage_开头的元素
+                            for td in soup.select('td'):
+                                td_id = td.get('id', '')
+                                if td_id.startswith('postmessage_'):
+                                    content = td.get_text(separator='\n', strip=True)
+                                    if content and len(content) > 50:
+                                        return content
+                            selectors = ['td.portal_content', '#article-content', '.t_f', '.message', '.content']
+                        elif source_name == "电子工程专辑":
+                            # 电子工程专辑详情页选择器（eet-china.com）
+                            # 先等待更长时间让JS渲染完成
+                            time_module.sleep(2)
+                            soup = BeautifulSoup(driver_to_use.page_source, 'html.parser')
+                            
+                            # 移除非正文元素
+                            for tag in soup.select('.partner-content, .recommend, .hot-article, .related, aside, .sidebar, .ad, .share, .comment'):
+                                tag.decompose()
+                            
+                            # 优先尝试特定选择器
+                            selectors = [
+                                '.article-con',          # eet-china主内容选择器
+                                '.article-detail',
+                                '.article-detail-content',
+                                '.article-content', 
+                                '.detail-content',
+                                '.news-content',
+                                '.article-body',
+                            ]
+                            
+                            content_found = None
+                            for selector in selectors:
+                                content_div = soup.select_one(selector)
+                                if content_div:
+                                    for tag in content_div.find_all(['script', 'style', 'iframe', 'nav', 'header', 'footer']):
+                                        tag.decompose()
+                                    # 只提取<p>标签的文本（正文段落）
+                                    paragraphs = content_div.find_all('p')
+                                    if paragraphs:
+                                        content_found = '\n'.join([p.get_text(strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 20])
+                                    else:
+                                        content_found = content_div.get_text(separator='\n', strip=True)
+                                    if content_found and len(content_found) > 100:
+                                        return content_found
+                            
+                            # 备选：从整个页面提取长<p>标签（正文段落通常较长）
+                            all_paragraphs = soup.find_all('p')
+                            long_paragraphs = [p.get_text(strip=True) for p in all_paragraphs if len(p.get_text(strip=True)) > 50]
+                            if long_paragraphs:
+                                content_found = '\n'.join(long_paragraphs)
+                                if len(content_found) > 200:
+                                    return content_found
+                            
+                            return ''  # 不fallback到body，避免获取非正文内容
+                        else:  # 电子工程世界
+                            selectors = ['.newscc', 'article .newscc', '.article-content', '.content']
+                        
+                        for selector in selectors:
+                            content_div = soup.select_one(selector)
+                            if content_div:
+                                for tag in content_div.find_all(['script', 'style', 'iframe', 'nav', 'header', 'footer']):
+                                    tag.decompose()
+                                content = content_div.get_text(separator='\n', strip=True)
+                                if content and len(content) > 50:
+                                    return content
+                        
+                        # 备选：获取body的主要文本
+                        body = soup.select_one('body')
+                        if body:
+                            for tag in body.find_all(['script', 'style', 'iframe', 'nav', 'header', 'footer', 'aside']):
+                                tag.decompose()
+                            content = body.get_text(separator='\n', strip=True)
+                            if content and len(content) > 100:
+                                return content[:5000]  # 截取前5000字
+                        return ''
+                    except Exception as e:
+                        return ''
+                
+                for i, item in enumerate(selenium_items):
+                    source_name = item['source']
+                    news = item['news']
+                    title_short = news['title'][:30] + "..." if len(news['title']) > 30 else news['title']
+                    print(f"  [{i+1}/{len(selenium_items)}] {source_name}: 正在获取...", end="\r")
+                    content = fetch_with_driver(news['link'], source_name)
+                    content_len = len(content) if content else 0
+                    results.append({**item, 'content': content, 'content_len': content_len})
+                    status = f"✓{content_len}字" if content_len > 0 else "✗无内容"
+                    print(f"  [{i+1}/{len(selenium_items)}] {source_name}: {status} - {title_short}    ")
+                
+                selenium_success = sum(1 for r in results[-len(selenium_items):] if r.get('content_len', 0) > 0)
+                print(f"  Selenium来源完成: {selenium_success}条成功, {len(selenium_items)-selenium_success}条无内容")
+                
+                # 只有新创建的driver才关闭
+                if created_new_driver:
+                    driver_to_use.quit()
+        
+        # 关闭共享driver（如果存在）
+        if shared_driver:
+            try:
+                shared_driver.quit()
+                print("\n  共享driver已关闭")
+            except:
+                pass
         
         # 整理结果到 news_by_company
+        # Selenium来源（内容获取可能不稳定，放宽字数限制）
+        selenium_sources = ["电子工程网", "电子工程专辑", "电子工程世界"]
+        
         for item in results:
             company_name = item['company']
             source_name = item['source']
             content_len = item['content_len']
             
-            # 过滤掉字数少于100的新闻
-            if content_len < 200:
+            # Selenium来源放宽字数限制（50字），其他来源200字
+            min_len = 50 if source_name in selenium_sources else 200
+            if content_len < min_len:
                 continue
             
             if company_name not in news_by_company:
@@ -1271,7 +1792,7 @@ def main():
                         detail_prefix = "  │     "
                         link_prefix = "  │     "
                     
-                    print(f"{news_prefix} [{global_index}] {news['title'][:50]}{'...' if len(news['title']) > 50 else ''}")
+                    print(f"{news_prefix} [{global_index}] {news['title']}")
                     print(f"{detail_prefix}状态: {is_complete} ({content_len}字) | 日期: {news.get('date', '-')}")
                     print(f"{link_prefix}链接: {news['link']}")
                     

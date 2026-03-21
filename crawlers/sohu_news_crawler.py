@@ -8,10 +8,23 @@
 2. Selenium（备选）: pip install selenium webdriver-manager
 """
 
+import os
+import logging
+# 在任何import前禁用webdriver_manager日志和代理
+os.environ['WDM_LOG'] = '0'
+os.environ['WDM_LOG_LEVEL'] = '0'
+os.environ['WDM_LOCAL'] = '1'
+os.environ['WDM_SSL_VERIFY'] = '0'
+os.environ['NO_PROXY'] = '*'
+os.environ['no_proxy'] = '*'
+for _name in ['WDM', 'webdriver_manager', 'webdriver_manager.core', 'urllib3']:
+    logging.getLogger(_name).setLevel(logging.CRITICAL)
+    logging.getLogger(_name).propagate = False
+    logging.getLogger(_name).disabled = True
+
 import requests
 from bs4 import BeautifulSoup
 import json
-import os
 import re
 import urllib3
 from datetime import datetime, timedelta
@@ -263,22 +276,46 @@ class SohuNewsCrawler:
             chrome_options.add_argument('--proxy-bypass-list=*')
             chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
             
-            # 优先使用系统Chrome驱动（更快）
+            # 尝试启动Chrome（抑制webdriver_manager警告）
             print("  正在启动Chrome...")
+            import sys
+            
+            # 保存原始文件描述符
+            _orig_stdout_fd = os.dup(1)
+            _orig_stderr_fd = os.dup(2)
+            _devnull_fd = os.open(os.devnull, os.O_WRONLY)
+            
+            # 在OS层面重定向stdout和stderr到devnull
+            os.dup2(_devnull_fd, 1)
+            os.dup2(_devnull_fd, 2)
+            sys.stdout = open(os.devnull, 'w')
+            sys.stderr = open(os.devnull, 'w')
+            
+            driver = None
+            startup_error = None
             try:
-                driver = webdriver.Chrome(options=chrome_options)
-            except Exception as e:
-                print(f"  系统Chrome失败: {e}，尝试webdriver_manager...")
                 try:
-                    import os
-                    os.environ['WDM_LOG_LEVEL'] = '0'
-                    os.environ['WDM_LOCAL'] = '1'
+                    driver = webdriver.Chrome(options=chrome_options)
+                except Exception:
+                    # 系统Chrome失败，尝试webdriver_manager
                     from webdriver_manager.chrome import ChromeDriverManager
                     service = Service(ChromeDriverManager().install())
                     driver = webdriver.Chrome(service=service, options=chrome_options)
-                except Exception as e2:
-                    print(f"  Selenium启动失败: {e2}")
-                    return []
+            except Exception as e:
+                startup_error = e
+            finally:
+                # 恢复原始文件描述符
+                os.dup2(_orig_stdout_fd, 1)
+                os.dup2(_orig_stderr_fd, 2)
+                os.close(_orig_stdout_fd)
+                os.close(_orig_stderr_fd)
+                os.close(_devnull_fd)
+                sys.stdout = sys.__stdout__
+                sys.stderr = sys.__stderr__
+            
+            if startup_error:
+                print(f"  Selenium启动失败: {startup_error}")
+                return []
             
             # 设置页面加载超时
             driver.set_page_load_timeout(30)
