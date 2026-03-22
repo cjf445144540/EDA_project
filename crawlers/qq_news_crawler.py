@@ -139,7 +139,7 @@ class QQNewsCrawler:
         :return: 新闻列表
         """
         if not HAS_PLAYWRIGHT and not HAS_SELENIUM:
-            print("⚠️  腾讯新闻爬虫需要安装浏览器自动化库：")
+            print("[!] 腾讯新闻爬虫需要安装浏览器自动化库：")
             print("    方案1: pip install playwright && playwright install chromium")
             print("    方案2: pip install selenium webdriver-manager")
             return []
@@ -155,7 +155,7 @@ class QQNewsCrawler:
                         print("  Playwright浏览器未安装，切换到Selenium...")
                         return self._crawl_with_selenium(max_pages, days, min_content_length)
                     else:
-                        print("⚠️  Playwright浏览器未安装，请执行: playwright install chromium")
+                        print("[!] Playwright浏览器未安装，请执行: playwright install chromium")
                         print("    或安装Selenium: pip install selenium webdriver-manager")
                         return []
                 raise

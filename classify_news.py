@@ -96,7 +96,8 @@ class NewsClassifier:
                     news_output = {
                         'title': news_item.get('title', ''),
                         'link': news_item.get('link', ''),
-                        'date': news_item.get('date', '')
+                        'date': news_item.get('date', ''),
+                        'content': news_item.get('content', '')
                     }
                     
                     # 如果是跳过筛选的来源，直接保留
@@ -205,7 +206,7 @@ def main():
     if classified_results:
         classifier.print_summary(classified_results)
     else:
-        print("\n⚠️  警告: 所有股票的新闻都被过滤掉了，没有符合条件的新闻")
+        print("\n[!] 警告: 所有股票的新闻都被过滤掉了，没有符合条件的新闻")
     
     # 5. 打印详细分类结果示例
     if classified_results:

@@ -26,6 +26,10 @@ class EEWorldNewsCrawler:
     
     BASE_URL = "https://www.eeworld.com.cn"
     SEARCH_URL = "https://so.eeworld.com.cn/s"
+    PAGE_READY_TIMEOUT = 10
+    DETAIL_READY_TIMEOUT = 6
+    RETRY_WAIT_SECONDS = 1.2
+    PAGE_GAP_SECONDS = 0.5
     
     def __init__(self, keyword="EDA"):
         self.keyword = keyword
@@ -90,7 +94,7 @@ class EEWorldNewsCrawler:
         driver.set_page_load_timeout(30)
         return driver
     
-    def crawl(self, max_pages=10, days=30, shared_driver=None):
+    def crawl(self, max_pages=10, days=30, shared_driver=None, min_content_length=500):
         """
         爬取新闻列表
         :param max_pages: 最大爬取页数
@@ -123,13 +127,13 @@ class EEWorldNewsCrawler:
                     url = f"{self.SEARCH_URL}?wd={self.keyword}&sc=news&pn={page}"
                 
                 # 加载页面（重试机制）
-                max_retries = 3
+                max_retries = 2 if use_shared else 3
                 success = False
                 for retry in range(max_retries):
                     try:
                         driver.get(url)
                         # 等待表格加载
-                        WebDriverWait(driver, 20).until(
+                        WebDriverWait(driver, self.PAGE_READY_TIMEOUT).until(
                             EC.presence_of_element_located((By.CSS_SELECTOR, 'table.result, .search-result, .result-list'))
                         )
                         success = True
@@ -137,7 +141,7 @@ class EEWorldNewsCrawler:
                     except Exception as e:
                         if retry < max_retries - 1:
                             print(f"  第 {page} 页加载失败，重试 {retry + 1}/{max_retries}...")
-                            time.sleep(2)
+                            time.sleep(self.RETRY_WAIT_SECONDS * (retry + 1))
                         else:
                             print(f"  第 {page} 页加载失败: {e}")
                 
@@ -171,6 +175,13 @@ class EEWorldNewsCrawler:
                     
                     title = title_elem.get_text(strip=True)
                     link = title_elem.get('href', '')
+                    content_preview = ''
+                    preview_elem = row.select_one('td.f p')
+                    if preview_elem:
+                        preview_copy = BeautifulSoup(str(preview_elem), 'html.parser')
+                        for tag in preview_copy.select('span.g'):
+                            tag.decompose()
+                        content_preview = preview_copy.get_text(' ', strip=True)
                     
                     # 从a标签的s_pub属性获取日期
                     date = title_elem.get('s_pub', '')
@@ -195,7 +206,8 @@ class EEWorldNewsCrawler:
                         'title': title,
                         'link': link,
                         'date': date,
-                        'source': '电子工程世界'
+                        'source': '电子工程世界',
+                        'content': content_preview
                     })
                     page_count += 1
                 
@@ -209,7 +221,8 @@ class EEWorldNewsCrawler:
                     print(f"  本页无有效新闻，停止爬取")
                     break
                 
-                time.sleep(1.5)  # 延迟1.5秒
+                if page < max_pages:
+                    time.sleep(self.PAGE_GAP_SECONDS)
         
         except Exception as e:
             print(f"  爬取出错: {e}")
@@ -229,6 +242,19 @@ class EEWorldNewsCrawler:
                 seen_links.add(news['link'])
                 unique_news.append(news)
         
+        if min_content_length > 0 and unique_news:
+            print(f"  正在获取新闻内容并过滤（>={min_content_length}字）...")
+            filtered_news = []
+            for news in unique_news:
+                content = news.get('content', '')
+                if not content or len(content) < min_content_length:
+                    content = self.fetch_news_content(news['link'])
+                content_len = len(content) if content else 0
+                if content_len >= min_content_length:
+                    news['content'] = content
+                    filtered_news.append(news)
+            unique_news = filtered_news
+        
         print(f"  共获取 {len(unique_news)} 条新闻")
         return unique_news
     
@@ -245,7 +271,12 @@ class EEWorldNewsCrawler:
         
         try:
             driver.get(url)
-            time.sleep(2)  # 等待页面加载
+            try:
+                WebDriverWait(driver, self.DETAIL_READY_TIMEOUT).until(
+                    lambda d: d.find_elements(By.CSS_SELECTOR, '.newscc, article .newscc, .article-content, .article-body, #content, .news-content, article')
+                )
+            except:
+                pass
             
             soup = BeautifulSoup(driver.page_source, 'html.parser')
             

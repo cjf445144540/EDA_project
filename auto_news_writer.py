@@ -327,10 +327,10 @@ def main(news_url=None):
     
     # 显示是否添加了官网去主观化要求
     if "官网" in source:
-        print(f"  ✅ 检测到官网来源 [{source}]，已添加去除主观描述的提示词")
+        print(f"  [OK] 检测到官网来源 [{source}]，已添加去除主观描述的提示词")
     
     print("\n" + "=" * 60)
-    print("✅ 提示词已复制到剪贴板！")
+    print("[OK] 提示词已复制到剪贴板！")
     print("=" * 60)
     print("\n提示词预览：")
     print("-" * 60)

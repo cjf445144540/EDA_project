@@ -26,6 +26,10 @@ class EETChinaNewsCrawler:
     
     BASE_URL = "https://www.eet-china.com"
     SEARCH_URL = "https://www.eet-china.com/e/sch/index.php"
+    PAGE_READY_TIMEOUT = 12
+    DETAIL_READY_TIMEOUT = 8
+    RETRY_WAIT_SECONDS = 1.2
+    PAGE_GAP_SECONDS = 0.4
     
     def __init__(self, keyword="eda"):
         self.keyword = keyword
@@ -93,7 +97,7 @@ class EETChinaNewsCrawler:
         driver.set_page_load_timeout(30)
         return driver
     
-    def crawl(self, max_pages=10, days=90, shared_driver=None):
+    def crawl(self, max_pages=10, days=90, shared_driver=None, min_content_length=500):
         """
         爬取新闻列表
         :param max_pages: 最大爬取页数
@@ -126,30 +130,20 @@ class EETChinaNewsCrawler:
                     url = f"{self.SEARCH_URL}?page={page}&keyboard={self.keyword}&field=2&sear=1"
                 
                 # 加载页面（重试机制）
-                max_retries = 3
+                max_retries = 2 if use_shared else 3
                 success = False
                 for retry in range(max_retries):
                     try:
                         driver.get(url)
-                        # 先等待2秒让页面开始加载
-                        time.sleep(2)
-                        # 等待列表元素出现（最多20秒）
-                        try:
-                            WebDriverWait(driver, 20).until(
-                                EC.presence_of_element_located((By.CSS_SELECTOR, 'ul.main_list'))
-                            )
-                        except:
-                            # 超时后检查页面是否有内容
-                            if 'main_list' in driver.page_source:
-                                pass  # 有内容就继续
-                            else:
-                                raise Exception("页面内容未加载")
+                        WebDriverWait(driver, self.PAGE_READY_TIMEOUT).until(
+                            EC.presence_of_element_located((By.CSS_SELECTOR, 'ul.main_list, li.search-article-item'))
+                        )
                         success = True
                         break
                     except Exception as e:
                         if retry < max_retries - 1:
                             print(f"  第 {page + 1} 页加载失败，重试 {retry + 1}/{max_retries}...")
-                            time.sleep(3)  # 增加重试等待时间
+                            time.sleep(self.RETRY_WAIT_SECONDS * (retry + 1))
                         else:
                             error_msg = str(e)
                             if 'timeout' in error_msg.lower() or 'Timed out' in error_msg:
@@ -215,7 +209,8 @@ class EETChinaNewsCrawler:
                     print(f"  已达到日期限制，停止爬取")
                     break
                 
-                time.sleep(1.5)  # 延迟1.5秒
+                if page < max_pages - 1:
+                    time.sleep(self.PAGE_GAP_SECONDS)
         
         except Exception as e:
             print(f"  爬取出错: {e}")
@@ -235,6 +230,19 @@ class EETChinaNewsCrawler:
                 seen_links.add(news['link'])
                 unique_news.append(news)
         
+        if min_content_length > 0 and unique_news:
+            print(f"  正在获取新闻内容并过滤（>={min_content_length}字）...")
+            filtered_news = []
+            for news in unique_news:
+                content = news.get('content', '')
+                if not content or len(content) < min_content_length:
+                    content = self.fetch_news_content(news['link'])
+                content_len = len(content) if content else 0
+                if content_len >= min_content_length:
+                    news['content'] = content
+                    filtered_news.append(news)
+            unique_news = filtered_news
+        
         print(f"  共获取 {len(unique_news)} 条新闻")
         return unique_news
     
@@ -251,7 +259,9 @@ class EETChinaNewsCrawler:
         
         try:
             driver.get(url)
-            time.sleep(2)  # 等待页面加载
+            WebDriverWait(driver, self.DETAIL_READY_TIMEOUT).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, '.article-con, .article-detail, .article-content, .article-body, #article-content'))
+            )
             
             soup = BeautifulSoup(driver.page_source, 'html.parser')
             
