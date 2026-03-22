@@ -129,6 +129,157 @@ class QQNewsCrawler:
             date_str = match.group(1)
             return f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
         return ''
+
+    def _is_keyword_relevant(self, text):
+        if not text:
+            return False
+        text_lower = text.lower()
+        keyword_lower = (self.keyword or '').strip().lower()
+        if not keyword_lower:
+            return True
+        if keyword_lower in text_lower:
+            return True
+        if keyword_lower == 'eda':
+            if '电子设计自动化' in text or '芯片设计' in text or 'ic设计' in text_lower:
+                return True
+        parts = [p for p in re.split(r'[\s,，/|]+', keyword_lower) if p]
+        for p in parts:
+            if p in text_lower:
+                return True
+        return False
+
+    def _extract_news_from_html_fallback(self, html, cutoff_date, skip_keywords):
+        """当页面结构变化导致主选择器失效时，回退到全页链接提取"""
+        soup = BeautifulSoup(html, 'html.parser')
+        result = []
+        seen = set()
+        anchors = soup.select('a[href]')
+        for a in anchors:
+            href = (a.get('href') or '').strip()
+            if not href:
+                continue
+            if href.startswith('//'):
+                href = 'https:' + href
+            elif href.startswith('/'):
+                href = 'https://news.qq.com' + href
+            if not href.startswith('http'):
+                continue
+            if 'qq.com' not in href:
+                continue
+            if '/a/' not in href:
+                continue
+            date = self._extract_date_from_url(href)
+            if not date:
+                continue
+            if date < cutoff_date:
+                continue
+            title = a.get_text(strip=True) or (a.get('title') or '').strip()
+            if not title or len(title) < 8:
+                continue
+            if not self._is_keyword_relevant(title):
+                continue
+            if any(kw in title for kw in skip_keywords):
+                continue
+            key = (href, title)
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append({
+                'title': title,
+                'link': href,
+                'date': date,
+                'source': '腾讯网',
+            })
+        return result
+
+    def _extract_news_from_script_fallback(self, html, cutoff_date, skip_keywords):
+        soup = BeautifulSoup(html, 'html.parser')
+        result = []
+        seen = set()
+        patterns = [
+            r'"url"\s*:\s*"(?P<url>https?:\\?/\\?/[^"]*?qq\.com[^"]*?/a/[^"]+)"[^{}]{0,600}"title"\s*:\s*"(?P<title>[^"]{6,200})"',
+            r'"title"\s*:\s*"(?P<title>[^"]{6,200})"[^{}]{0,600}"url"\s*:\s*"(?P<url>https?:\\?/\\?/[^"]*?qq\.com[^"]*?/a/[^"]+)"',
+        ]
+        for script in soup.find_all('script'):
+            content = script.string or script.get_text() or ''
+            if not content:
+                continue
+            if '/a/' not in content and '\\/a\\/' not in content:
+                continue
+            for pattern in patterns:
+                for m in re.finditer(pattern, content, flags=re.IGNORECASE):
+                    href = (m.group('url') or '').replace('\\/', '/').replace('\\u002F', '/')
+                    title = (m.group('title') or '').replace('\\"', '"').strip()
+                    try:
+                        title = title.encode('utf-8').decode('unicode_escape')
+                    except Exception:
+                        pass
+                    if not href.startswith('http'):
+                        continue
+                    date = self._extract_date_from_url(href)
+                    if not date or date < cutoff_date:
+                        continue
+                    if not title or len(title) < 8:
+                        continue
+                    if not self._is_keyword_relevant(title):
+                        continue
+                    if any(kw in title for kw in skip_keywords):
+                        continue
+                    key = (href, title)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    result.append({
+                        'title': title,
+                        'link': href,
+                        'date': date,
+                        'source': '腾讯网',
+                    })
+        return result
+
+    def _extract_news_from_search_engine_fallback(self, cutoff_date, skip_keywords):
+        result = []
+        seen = set()
+        query = f"site:news.qq.com {self.keyword}"
+        search_urls = [
+            f"https://cn.bing.com/search?q={query}",
+            f"https://www.bing.com/search?q={query}",
+        ]
+        for search_url in search_urls:
+            try:
+                resp = requests.get(search_url, headers=self.headers, timeout=12, verify=False, proxies={'http': None, 'https': None})
+                if resp.status_code != 200:
+                    continue
+                soup = BeautifulSoup(resp.text, 'html.parser')
+                for a in soup.select('li.b_algo h2 a, h2 a[href]'):
+                    href = (a.get('href') or '').strip()
+                    title = a.get_text(strip=True)
+                    if not href or not title:
+                        continue
+                    if 'qq.com' not in href or '/a/' not in href:
+                        continue
+                    if not self._is_keyword_relevant(title):
+                        continue
+                    date = self._extract_date_from_url(href)
+                    if not date or date < cutoff_date:
+                        continue
+                    if any(kw in title for kw in skip_keywords):
+                        continue
+                    key = (href, title)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    result.append({
+                        'title': title,
+                        'link': href,
+                        'date': date,
+                        'source': '腾讯网',
+                    })
+                if result:
+                    return result
+            except Exception:
+                continue
+        return result
     
     def crawl(self, max_pages=3, days=7, min_content_length=500):
         """
@@ -193,13 +344,28 @@ class QQNewsCrawler:
                 try:
                     page.wait_for_selector('div.card-margin.img-text-card', timeout=10000)
                 except:
-                    print(f"  第 {page_num} 页没有找到新闻")
-                    break
+                    pass
                 
                 # 获取新闻列表
                 news_items = page.query_selector_all('div.card-margin.img-text-card:not(.wiki-card)')
                 
                 if not news_items:
+                    fallback_news = self._extract_news_from_html_fallback(page.content(), cutoff_date, skip_keywords)
+                    if fallback_news:
+                        all_news.extend(fallback_news)
+                        print(f"  第 {page_num} 页: {len(fallback_news)} 条新闻（fallback）")
+                        continue
+                    fallback_news_script = self._extract_news_from_script_fallback(page.content(), cutoff_date, skip_keywords)
+                    if fallback_news_script:
+                        all_news.extend(fallback_news_script)
+                        print(f"  第 {page_num} 页: {len(fallback_news_script)} 条新闻（script-fallback）")
+                        continue
+                    if page_num == 1:
+                        fallback_news_search = self._extract_news_from_search_engine_fallback(cutoff_date, skip_keywords)
+                        if fallback_news_search:
+                            all_news.extend(fallback_news_search)
+                            print(f"  第 {page_num} 页: {len(fallback_news_search)} 条新闻（search-fallback）")
+                            break
                     print(f"  第 {page_num} 页没有新闻")
                     break
                 
@@ -361,13 +527,28 @@ class QQNewsCrawler:
                         EC.presence_of_element_located((By.CSS_SELECTOR, 'div.card-margin.img-text-card'))
                     )
                 except:
-                    print(f"  第 {page_num} 页没有找到新闻")
-                    break
+                    pass
                 
                 # 获取新闻列表
                 news_items = driver.find_elements(By.CSS_SELECTOR, 'div.card-margin.img-text-card:not(.wiki-card)')
                 
                 if not news_items:
+                    fallback_news = self._extract_news_from_html_fallback(driver.page_source, cutoff_date, skip_keywords)
+                    if fallback_news:
+                        all_news.extend(fallback_news)
+                        print(f"  第 {page_num} 页: {len(fallback_news)} 条新闻（fallback）")
+                        continue
+                    fallback_news_script = self._extract_news_from_script_fallback(driver.page_source, cutoff_date, skip_keywords)
+                    if fallback_news_script:
+                        all_news.extend(fallback_news_script)
+                        print(f"  第 {page_num} 页: {len(fallback_news_script)} 条新闻（script-fallback）")
+                        continue
+                    if page_num == 1:
+                        fallback_news_search = self._extract_news_from_search_engine_fallback(cutoff_date, skip_keywords)
+                        if fallback_news_search:
+                            all_news.extend(fallback_news_search)
+                            print(f"  第 {page_num} 页: {len(fallback_news_search)} 条新闻（search-fallback）")
+                            break
                     print(f"  第 {page_num} 页没有新闻")
                     break
                 

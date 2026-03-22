@@ -28,6 +28,8 @@ class SynopsysNewsCrawler:
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
         }
+        self.timeout_main = 12
+        self.timeout_follow = 8
     
     def crawl(self, max_pages=1, days=7, months=None):
         """
@@ -93,7 +95,7 @@ class SynopsysNewsCrawler:
                 url = f"{base_url}page/{page}/"
             
             try:
-                response = requests.get(url, headers=self.headers, timeout=15, verify=False, proxies={'http': None, 'https': None})
+                response = requests.get(url, headers=self.headers, timeout=self.timeout_main, verify=False, proxies={'http': None, 'https': None})
                 response.encoding = 'utf-8'
                 
                 if response.status_code != 200:
@@ -266,7 +268,7 @@ class SynopsysNewsCrawler:
                 url = f"{base_url}?o={page * 5}"
             
             try:
-                response = requests.get(url, headers=self.headers, timeout=15, verify=False, proxies={'http': None, 'https': None})
+                response = requests.get(url, headers=self.headers, timeout=self.timeout_main, verify=False, proxies={'http': None, 'https': None})
                 response.encoding = 'utf-8'
                 
                 if response.status_code != 200:
@@ -323,10 +325,10 @@ class SynopsysNewsCrawler:
     def fetch_news_content(self, url):
         """获取新闻详情页的正文内容（带重试机制）"""
         import time
-        max_retries = 3
+        max_retries = 2
         for attempt in range(max_retries):
             try:
-                response = requests.get(url, headers=self.headers, timeout=20, verify=False, proxies={'http': None, 'https': None})
+                response = requests.get(url, headers=self.headers, timeout=self.timeout_main, verify=False, proxies={'http': None, 'https': None})
                 response.encoding = 'utf-8'
                 
                 if response.status_code != 200:
@@ -355,9 +357,9 @@ class SynopsysNewsCrawler:
                                     content_parts.append(txt)
                             content = '\n'.join(content_parts)
                             # 尝试追进原始链接获取更多内容
-                            if read_more_link and read_more_link.startswith('http'):
+                            if read_more_link and read_more_link.startswith('http') and (not content or len(content) < 180):
                                 try:
-                                    orig_resp = requests.get(read_more_link, headers=self.headers, timeout=15, verify=False, proxies={'http': None, 'https': None})
+                                    orig_resp = requests.get(read_more_link, headers=self.headers, timeout=self.timeout_follow, verify=False, proxies={'http': None, 'https': None})
                                     if orig_resp.status_code == 200:
                                         orig_soup = BeautifulSoup(orig_resp.text, 'html.parser')
                                         orig_text = None
@@ -373,7 +375,7 @@ class SynopsysNewsCrawler:
                                                     break
                                                 orig_text = None
                                         # 内容不足时尝试全页 <p> 小段落拼接（兼容 Elementor 等 Page Builder）
-                                        if not orig_text or len(orig_text) <= 100:
+                                        if not orig_text or len(orig_text) <= 120:
                                             all_paras = orig_soup.find_all('p')
                                             long_paras = [p.get_text(strip=True) for p in all_paras
                                                          if len(p.get_text(strip=True)) > 80

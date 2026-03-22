@@ -286,7 +286,7 @@ EECHINA_CONFIG = {
 
 # 电子工程专辑（eet-china.com）
 EETCHINA_CONFIG = {
-    'enabled': True,  # 是否启用
+    'enabled': False,  # 是否启用
     'max_pages': DEFAULT_MAX_PAGES,
     'days': DEFAULT_DAYS,
     'min_content_length': DEFAULT_MIN_CONTENT_LENGTH,
@@ -1521,6 +1521,23 @@ def main():
                         'source': source_name,
                         'news': news
                     })
+        content_cache = {}
+        cache_lock = threading.Lock()
+        content_cache_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'json', 'content_cache.json')
+        try:
+            if os.path.exists(content_cache_file):
+                with open(content_cache_file, 'r', encoding='utf-8') as f:
+                    persisted_cache = json.load(f)
+                    if isinstance(persisted_cache, dict):
+                        for k, v in persisted_cache.items():
+                            if isinstance(v, dict):
+                                cached_text = v.get('content', '')
+                            else:
+                                cached_text = v if isinstance(v, str) else ''
+                            if cached_text and len(cached_text) >= 200:
+                                content_cache[k] = cached_text
+        except Exception:
+            pass
         
         # 定义获取单条新闻内容的函数
         def fetch_single_news(item):
@@ -1530,6 +1547,12 @@ def main():
                 cached_content = news.get('content', '')
                 if cached_content and len(cached_content) >= 200:
                     return {**item, 'content': cached_content, 'content_len': len(cached_content)}
+                link = news.get('link', '')
+                if link:
+                    with cache_lock:
+                        cached_by_link = content_cache.get(link, '')
+                    if cached_by_link and len(cached_by_link) >= 200:
+                        return {**item, 'content': cached_by_link, 'content_len': len(cached_by_link)}
                 if source_name == "芯华章官网":
                     content = xepic_crawler.fetch_news_content(news['link'])
                 elif source_name == "深圳电子商会":
@@ -1558,22 +1581,37 @@ def main():
                     content = sohu_crawler.fetch_news_content(news['link'])
                 else:
                     content = fetch_news_content(news['link'])
-                return {**item, 'content': content, 'content_len': len(content) if content else 0}
+                content_len = len(content) if content else 0
+                if link and content_len >= 200:
+                    with cache_lock:
+                        content_cache[link] = content
+                return {**item, 'content': content, 'content_len': content_len}
             except Exception as e:
                 return {**item, 'content': None, 'content_len': 0}
         
-        # Selenium来源需要顺序获取内容
-        selenium_sources = ["腾讯网", "搜狐网", "电子工程网", "电子工程专辑", "电子工程世界"]
+        # 仅保留“内容获取阶段确实依赖共享driver慢路径”的来源
+        selenium_sources = ["电子工程网", "电子工程专辑", "电子工程世界"]
         
         # 分离普通来源和Selenium来源
         normal_items = [item for item in all_news_items if item['source'] not in selenium_sources]
         selenium_items = [item for item in all_news_items if item['source'] in selenium_sources]
+        normal_grouped_items = []
+        normal_link_groups = {}
+        for item in normal_items:
+            link = item.get('news', {}).get('link', '')
+            if link:
+                normal_link_groups.setdefault(link, []).append(item)
+            else:
+                normal_grouped_items.append([item])
+        normal_grouped_items.extend(normal_link_groups.values())
+        unique_normal_items = [group[0] for group in normal_grouped_items if group]
         
         # 显示内容获取统计
         total_items = len(all_news_items)
         print(f"  总计: {total_items} 条新闻")
         print(f"    · 普通来源: {len(normal_items)} 条（并行获取）")
-        print(f"    · Selenium来源: {len(selenium_items)} 条（顺序获取）")
+        print(f"      - 普通来源去重后请求: {len(unique_normal_items)} 条")
+        print(f"    · Selenium重来源: {len(selenium_items)} 条（限并发获取）")
         print(f"\n  【两者同时开始】")
         
         # 用于存储结果
@@ -1588,8 +1626,16 @@ def main():
             
             from bs4 import BeautifulSoup
             import time as time_module
+            import requests
             from selenium.webdriver.common.by import By
             from selenium.webdriver.support.ui import WebDriverWait
+            req_session = requests.Session()
+            req_headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            }
+            req_session.headers.update(req_headers)
             
             # 复用共享driver或创建新driver
             driver_to_use = driver_holder['driver']
@@ -1627,40 +1673,37 @@ def main():
                         selenium_results_content.append({**item, 'content': '', 'content_len': 0})
                     return
             
-            def fetch_with_driver(url, source_name):
-                """使用driver获取内容"""
+            driver_lock = threading.Lock()
+
+            def fetch_with_requests(url, source_name):
                 try:
-                    if source_name in ["电子工程网", "电子工程专辑", "电子工程世界"]:
-                        try:
-                            import requests
-                            req_headers = {
-                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-                            }
-                            resp = requests.get(url, headers=req_headers, timeout=10, verify=False, proxies={'http': None, 'https': None})
-                            if resp.status_code == 200:
-                                resp.encoding = resp.apparent_encoding or 'utf-8'
-                                req_soup = BeautifulSoup(resp.text, 'html.parser')
-                                if source_name == "电子工程网":
-                                    req_selectors = ['td[id^="postmessage_"]', 'td.portal_content', '#article-content', '.t_f', '.message', '.content']
-                                elif source_name == "电子工程专辑":
-                                    for tag in req_soup.select('.partner-content, .recommend, .hot-article, .related, aside, .sidebar, .ad, .share, .comment'):
-                                        tag.decompose()
-                                    req_selectors = ['.article-con', '.article-detail', '.article-detail-content', '.article-content', '.detail-content', '.news-content', '.article-body']
-                                else:
-                                    req_selectors = ['.newscc', 'article .newscc', '.article-content', '.article-body', '.content', '#content', '.news-content', 'article']
-                                for selector in req_selectors:
-                                    node = req_soup.select_one(selector)
-                                    if not node:
-                                        continue
-                                    for tag in node.find_all(['script', 'style', 'iframe', 'nav', 'header', 'footer', 'aside']):
-                                        tag.decompose()
-                                    content = node.get_text(separator='\n', strip=True)
-                                    if content and len(content) > 100:
-                                        return content
-                        except Exception:
-                            pass
+                    resp = req_session.get(url, timeout=10, verify=False, proxies={'http': None, 'https': None})
+                    if resp.status_code == 200:
+                        resp.encoding = resp.apparent_encoding or 'utf-8'
+                        req_soup = BeautifulSoup(resp.text, 'html.parser')
+                        if source_name == "电子工程网":
+                            req_selectors = ['td[id^="postmessage_"]', 'td.portal_content', '#article-content', '.t_f', '.message', '.content']
+                        elif source_name == "电子工程专辑":
+                            for tag in req_soup.select('.partner-content, .recommend, .hot-article, .related, aside, .sidebar, .ad, .share, .comment'):
+                                tag.decompose()
+                            req_selectors = ['.article-con', '.article-detail', '.article-detail-content', '.article-content', '.detail-content', '.news-content', '.article-body']
+                        else:
+                            req_selectors = ['.newscc', 'article .newscc', '.article-content', '.article-body', '.content', '#content', '.news-content', 'article']
+                        for selector in req_selectors:
+                            node = req_soup.select_one(selector)
+                            if not node:
+                                continue
+                            for tag in node.find_all(['script', 'style', 'iframe', 'nav', 'header', 'footer', 'aside']):
+                                tag.decompose()
+                            content = node.get_text(separator='\n', strip=True)
+                            if content and len(content) > 100:
+                                return content
+                except Exception:
+                    pass
+                return ''
+
+            def fetch_with_driver(url, source_name):
+                try:
                     try:
                         driver_to_use.delete_all_cookies()
                     except:
@@ -1748,28 +1791,50 @@ def main():
                     return ''
                 except Exception:
                     return ''
-            
-            for i, item in enumerate(selenium_items):
+
+            def fetch_selenium_item(item):
                 source_name = item['source']
                 news = item['news']
-                title_short = news['title'][:30] + "..." if len(news['title']) > 30 else news['title']
-                print(f"  [Selenium {i+1}/{len(selenium_items)}] {source_name}: 正在获取...")
+                link = news.get('link', '')
                 cached_content = news.get('content', '')
                 if cached_content and len(cached_content) >= 200:
-                    content = cached_content
-                elif source_name == "腾讯网":
-                    content = qq_crawler.fetch_news_content(news['link'])
-                elif source_name == "搜狐网":
-                    content = sohu_crawler.fetch_news_content(news['link'])
-                else:
-                    content = fetch_with_driver(news['link'], source_name)
+                    return {**item, 'content': cached_content, 'content_len': len(cached_content), 'cache_hit': True}
+                if link:
+                    with cache_lock:
+                        cached_by_link = content_cache.get(link, '')
+                    if cached_by_link and len(cached_by_link) >= 200:
+                        return {**item, 'content': cached_by_link, 'content_len': len(cached_by_link), 'cache_hit': True}
+                content = fetch_with_requests(link, source_name)
+                if not content:
+                    with driver_lock:
+                        content = fetch_with_driver(link, source_name)
                 content_len = len(content) if content else 0
-                selenium_results_content.append({**item, 'content': content, 'content_len': content_len})
-                status = f"[+]{content_len}字" if content_len > 0 else "[-]无内容"
-                print(f"  [Selenium {i+1}/{len(selenium_items)}] {source_name}: {status}")
+                if link and content_len >= 200:
+                    with cache_lock:
+                        content_cache[link] = content
+                return {**item, 'content': content, 'content_len': content_len, 'cache_hit': False}
+
+            selenium_workers = 3 if len(selenium_items) >= 3 else len(selenium_items)
+            print(f"  [Selenium] 启动限并发获取（{selenium_workers}线程）...")
+            with ThreadPoolExecutor(max_workers=selenium_workers) as executor:
+                futures = {executor.submit(fetch_selenium_item, item): item for item in selenium_items}
+                completed = 0
+                cache_hit_count = 0
+                for future in as_completed(futures):
+                    completed += 1
+                    result = future.result()
+                    source_name = result['source']
+                    news = result['news']
+                    title_short = news['title'][:30] + "..." if len(news['title']) > 30 else news['title']
+                    content_len = result.get('content_len', 0)
+                    if result.get('cache_hit'):
+                        cache_hit_count += 1
+                    selenium_results_content.append(result)
+                    status = f"[+]{content_len}字" if content_len > 0 else "[-]无内容"
+                    print(f"  [Selenium {completed}/{len(selenium_items)}] {source_name}: {status} | {title_short}")
             
             selenium_success = sum(1 for r in selenium_results_content if r.get('content_len', 0) > 0)
-            print(f"  [Selenium] 完成: {selenium_success}条成功, {len(selenium_items)-selenium_success}条无内容")
+            print(f"  [Selenium] 完成: {selenium_success}条成功, {len(selenium_items)-selenium_success}条无内容, 缓存命中{cache_hit_count}条")
             
             if created_new_driver:
                 driver_to_use.quit()
@@ -1786,34 +1851,66 @@ def main():
         success_count = 0
         fail_count = 0
         
-        if normal_items:
-            print(f"  [普通] 正在并行获取（10线程）...")
+        if unique_normal_items:
+            normal_workers = 12 if len(unique_normal_items) >= 12 else len(unique_normal_items)
+            print(f"  [普通] 正在并行获取（{normal_workers}线程）...")
             print(f"  [普通] 总任务数: {total}")
-            with ThreadPoolExecutor(max_workers=10) as executor:
-                futures = {executor.submit(fetch_single_news, item): item for item in normal_items}
+            with ThreadPoolExecutor(max_workers=normal_workers) as executor:
+                futures = {
+                    executor.submit(fetch_single_news, group[0]): group
+                    for group in normal_grouped_items if group
+                }
                 for future in as_completed(futures):
-                    src_item = futures[future]
+                    group = futures[future]
+                    src_item = group[0]
                     source_name = src_item.get('source', '-')
                     title = src_item.get('news', {}).get('title', '')
                     title_short = title[:28] + "..." if len(title) > 28 else title
-                    completed += 1
                     result = future.result()
-                    results.append(result)
-                    content_len = result.get('content_len', 0)
-                    if content_len > 0:
-                        success_count += 1
-                        status = f"{_icon('✅', '[OK]')} 成功"
-                    else:
-                        fail_count += 1
-                        status = f"{_icon('❌', '[ERR]')} 无内容"
-                    progress = (completed / total * 100) if total else 100
-                    print(f"  [普通 {completed}/{total} {progress:5.1f}%] {source_name} | {status} | {content_len}字 | {title_short}")
+                    for idx, grouped_item in enumerate(group):
+                        if idx == 0:
+                            grouped_result = result
+                        else:
+                            grouped_result = {
+                                **grouped_item,
+                                'content': result.get('content', ''),
+                                'content_len': result.get('content_len', 0)
+                            }
+                        results.append(grouped_result)
+                        content_len = grouped_result.get('content_len', 0)
+                        if content_len > 0:
+                            success_count += 1
+                            status = f"{_icon('✅', '[OK]')} 成功"
+                        else:
+                            fail_count += 1
+                            status = f"{_icon('❌', '[ERR]')} 无内容"
+                        completed += 1
+                        progress = (completed / total * 100) if total else 100
+                        print(f"  [普通 {completed}/{total} {progress:5.1f}%] {source_name} | {status} | {content_len}字 | {title_short}")
             print(f"  [普通] 完成: {success_count}条成功, {fail_count}条无内容")
         
         # 等待Selenium内容获取完成
         if selenium_content_thread:
             selenium_content_thread.join()
             results.extend(selenium_results_content)
+
+        try:
+            os.makedirs(os.path.dirname(content_cache_file), exist_ok=True)
+            persisted_payload = {}
+            for link, text in content_cache.items():
+                if text and len(text) >= 200:
+                    persisted_payload[link] = {
+                        'content': text,
+                        'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    }
+            if len(persisted_payload) > 1500:
+                trimmed_items = list(persisted_payload.items())[-1500:]
+                persisted_payload = dict(trimmed_items)
+            with open(content_cache_file, 'w', encoding='utf-8') as f:
+                json.dump(persisted_payload, f, ensure_ascii=False)
+            print(f"  内容缓存已更新: {len(persisted_payload)} 条")
+        except Exception:
+            pass
         
         # 关闭共享driver（如果存在）
         if driver_holder['driver']:
