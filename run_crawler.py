@@ -277,7 +277,7 @@ SOHU_CONFIG = {
 
 # 电子工程网 新闻配置
 EECHINA_CONFIG = {
-    'enabled': True,  # 是否启用
+    'enabled': False,  # 是否启用
     'max_pages': DEFAULT_MAX_PAGES,
     'days': DEFAULT_DAYS,
     'min_content_length': DEFAULT_MIN_CONTENT_LENGTH,
@@ -295,7 +295,7 @@ EETCHINA_CONFIG = {
 
 # 电子工程世界（eeworld.com.cn）
 EEWORLD_CONFIG = {
-    'enabled': True,  # 是否启用
+    'enabled': False,  # 是否启用
     'max_pages': DEFAULT_MAX_PAGES,
     'days': DEFAULT_DAYS,
     'min_content_length': DEFAULT_MIN_CONTENT_LENGTH,
@@ -1630,6 +1630,37 @@ def main():
             def fetch_with_driver(url, source_name):
                 """使用driver获取内容"""
                 try:
+                    if source_name in ["电子工程网", "电子工程专辑", "电子工程世界"]:
+                        try:
+                            import requests
+                            req_headers = {
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                            }
+                            resp = requests.get(url, headers=req_headers, timeout=10, verify=False, proxies={'http': None, 'https': None})
+                            if resp.status_code == 200:
+                                resp.encoding = resp.apparent_encoding or 'utf-8'
+                                req_soup = BeautifulSoup(resp.text, 'html.parser')
+                                if source_name == "电子工程网":
+                                    req_selectors = ['td[id^="postmessage_"]', 'td.portal_content', '#article-content', '.t_f', '.message', '.content']
+                                elif source_name == "电子工程专辑":
+                                    for tag in req_soup.select('.partner-content, .recommend, .hot-article, .related, aside, .sidebar, .ad, .share, .comment'):
+                                        tag.decompose()
+                                    req_selectors = ['.article-con', '.article-detail', '.article-detail-content', '.article-content', '.detail-content', '.news-content', '.article-body']
+                                else:
+                                    req_selectors = ['.newscc', 'article .newscc', '.article-content', '.article-body', '.content', '#content', '.news-content', 'article']
+                                for selector in req_selectors:
+                                    node = req_soup.select_one(selector)
+                                    if not node:
+                                        continue
+                                    for tag in node.find_all(['script', 'style', 'iframe', 'nav', 'header', 'footer', 'aside']):
+                                        tag.decompose()
+                                    content = node.get_text(separator='\n', strip=True)
+                                    if content and len(content) > 100:
+                                        return content
+                        except Exception:
+                            pass
                     try:
                         driver_to_use.delete_all_cookies()
                     except:

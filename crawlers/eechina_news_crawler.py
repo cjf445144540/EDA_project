@@ -37,6 +37,7 @@ class EEChinaNewsCrawler:
     DETAIL_READY_TIMEOUT = 6
     RETRY_WAIT_SECONDS = 1.2
     PAGE_GAP_SECONDS = 0.4
+    REQUEST_TIMEOUT = 10
     
     def __init__(self, keyword="EDA"):
         self.keyword = keyword
@@ -46,6 +47,56 @@ class EEChinaNewsCrawler:
             'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
             'Referer': 'https://www.eechina.com/',
         }
+        self.session = requests.Session()
+        self.session.headers.update(self.headers)
+
+    def _build_search_url(self, page):
+        if page == 1:
+            return f"{self.SEARCH_URL}?keyword={self.keyword}&orderby=datetime"
+        return f"{self.SEARCH_URL}?keyword={self.keyword}&orderby=datetime&page={page}"
+
+    def _extract_news_from_soup(self, soup, cutoff_date):
+        links = soup.select('a[href*="thread-"], a[href*="viewthread"], a.xst')
+        if not links:
+            return [], False
+        page_news = []
+        stop_crawl = False
+        seen_links = set()
+        for title_elem in links:
+            title = title_elem.get_text(strip=True)
+            if not title or len(title) < 5:
+                continue
+            href = title_elem.get('href', '')
+            if href.startswith('http'):
+                link = href
+            else:
+                link = f"{self.BASE_URL}/{href.lstrip('/')}"
+            if link in seen_links:
+                continue
+            li = title_elem.find_parent('li')
+            date = ''
+            if li:
+                cite_elem = li.select_one('cite')
+                if cite_elem:
+                    meta_text = cite_elem.get_text()
+                    date_match = re.search(r'(\d{4}-\d{2}-\d{2})', meta_text)
+                    date = date_match.group(1) if date_match else ''
+                if not date:
+                    text_match = re.search(r'(\d{4}-\d{2}-\d{2})', li.get_text(" ", strip=True))
+                    date = text_match.group(1) if text_match else ''
+            if not date:
+                continue
+            if date < cutoff_date:
+                stop_crawl = True
+                break
+            page_news.append({
+                'title': title,
+                'link': link,
+                'date': date,
+                'source': '电子工程网'
+            })
+            seen_links.add(link)
+        return page_news, stop_crawl
     
     def _init_driver(self, suppress_warning=True):
         """初始化Chrome驱动"""
@@ -141,101 +192,76 @@ class EEChinaNewsCrawler:
         
         try:
             for page in range(1, max_pages + 1):
-                if page == 1:
-                    url = f"{self.SEARCH_URL}?keyword={self.keyword}&orderby=datetime"
-                else:
-                    url = f"{self.SEARCH_URL}?keyword={self.keyword}&orderby=datetime&page={page}"
-                
-                max_retries = 2 if use_shared else 3
-                success = False
-                for retry in range(max_retries):
-                    try:
-                        driver.get(url)
-                        WebDriverWait(driver, self.PAGE_READY_TIMEOUT).until(
-                            lambda d: d.find_elements(By.CSS_SELECTOR, 'a[href*="thread-"], a[href*="viewthread"], a.xst')
-                        )
-                        success = True
-                        break
-                    except Exception:
-                        if retry < max_retries - 1:
-                            print(f"  第 {page} 页加载失败，重试 {retry + 1}/{max_retries}...")
-                            time.sleep(self.RETRY_WAIT_SECONDS * (retry + 1))
-                        else:
-                            try:
-                                WebDriverWait(driver, self.PAGE_READY_TIMEOUT_FALLBACK).until(
-                                    lambda d: d.find_elements(By.CSS_SELECTOR, 'a[href*="thread-"], a[href*="viewthread"], a.xst')
-                                )
-                                success = True
-                            except Exception:
-                                print(f"  第 {page} 页等待超时")
-                if not success:
-                    continue
-                
+                page_start = time.time()
+                url = self._build_search_url(page)
+                page_news = None
+                stop_crawl = False
+                page_mode = "requests"
                 try:
-                    
-                    soup = BeautifulSoup(driver.page_source, 'html.parser')
-                    
-                    # 查找新闻项
-                    news_items = soup.select('li')
-                    
-                    page_count = 0
-                    stop_crawl = False
-                    
-                    for item in news_items:
-                        title_elem = item.select_one('a[href*="thread-"], a[href*="viewthread"], a.xst')
-                        cite_elem = item.select_one('cite')
-                        
-                        if not title_elem or not cite_elem:
-                            continue
-                        
-                        # 提取标题
-                        title = title_elem.get_text(strip=True)
-                        if not title or len(title) < 5:
-                            continue
-                        
-                        # 提取链接
-                        href = title_elem.get('href', '')
-                        if href.startswith('http'):
-                            link = href
-                        else:
-                            link = f"{self.BASE_URL}/{href}"
-                        
-                        # 提取日期
-                        meta_text = cite_elem.get_text()
-                        date_match = re.search(r'(\d{4}-\d{2}-\d{2})', meta_text)
-                        date = date_match.group(1) if date_match else ''
-                        if not date:
-                            text_match = re.search(r'(\d{4}-\d{2}-\d{2})', item.get_text(" ", strip=True))
-                            date = text_match.group(1) if text_match else ''
-                        
-                        if not date:
-                            continue
-                        
-                        # 日期过滤
-                        if date < cutoff_date:
-                            stop_crawl = True
+                    response = self.session.get(
+                        url,
+                        timeout=self.REQUEST_TIMEOUT,
+                        verify=False,
+                        proxies={'http': None, 'https': None}
+                    )
+                    if response.status_code == 200:
+                        response.encoding = response.apparent_encoding or 'utf-8'
+                        resp_text = response.text
+                        resp_lower = resp_text.lower()
+                        if 'thread-' in resp_lower or 'viewthread' in resp_lower or 'class="xst"' in resp_lower:
+                            req_soup = BeautifulSoup(resp_text, 'html.parser')
+                            page_news, stop_crawl = self._extract_news_from_soup(req_soup, cutoff_date)
+                except Exception:
+                    page_news = None
+
+                if page_news is None:
+                    page_mode = "selenium"
+                    max_retries = 2 if use_shared else 3
+                    success = False
+                    for retry in range(max_retries):
+                        try:
+                            driver.get(url)
+                            WebDriverWait(driver, self.PAGE_READY_TIMEOUT).until(
+                                lambda d: d.find_elements(By.CSS_SELECTOR, 'a[href*="thread-"], a[href*="viewthread"], a.xst')
+                            )
+                            success = True
                             break
-                        
-                        all_news.append({
-                            'title': title,
-                            'link': link,
-                            'date': date,
-                            'source': '电子工程网'
-                        })
-                        page_count += 1
-                    
-                    print(f"  第 {page} 页: {page_count} 条新闻")
-                    
-                    if stop_crawl:
-                        print(f"  已达到日期限制，停止爬取")
+                        except Exception:
+                            if retry < max_retries - 1:
+                                print(f"  第 {page} 页加载失败，重试 {retry + 1}/{max_retries}...")
+                                time.sleep(self.RETRY_WAIT_SECONDS * (retry + 1))
+                            else:
+                                try:
+                                    WebDriverWait(driver, self.PAGE_READY_TIMEOUT_FALLBACK).until(
+                                        lambda d: d.find_elements(By.CSS_SELECTOR, 'a[href*="thread-"], a[href*="viewthread"], a.xst')
+                                    )
+                                    success = True
+                                except Exception:
+                                    print(f"  第 {page} 页等待超时")
+                    if not success:
+                        continue
+                    try:
+                        soup = BeautifulSoup(driver.page_source, 'html.parser')
+                        page_news, stop_crawl = self._extract_news_from_soup(soup, cutoff_date)
+                    except Exception as e:
+                        print(f"  第 {page} 页出错: {e}")
                         break
-                    
-                    if page < max_pages:
-                        time.sleep(self.PAGE_GAP_SECONDS)
-                        
-                except Exception as e:
-                    print(f"  第 {page} 页出错: {e}")
+
+                page_count = len(page_news)
+                all_news.extend(page_news)
+                elapsed = time.time() - page_start
+                print(f"  第 {page} 页: {page_count} 条新闻 | {page_mode} | {elapsed:.2f}s")
+
+                if stop_crawl:
+                    print(f"  已达到日期限制，停止爬取")
                     break
+
+                if page_count == 0:
+                    print(f"  本页无有效新闻，停止爬取")
+                    break
+
+                if page < max_pages:
+                    time.sleep(self.PAGE_GAP_SECONDS)
         
         except Exception as e:
             print(f"  爬取出错: {e}")
@@ -257,30 +283,71 @@ class EEChinaNewsCrawler:
         
         if min_content_length > 0 and unique_news:
             print(f"  正在获取新闻内容并过滤（>={min_content_length}字）...")
+            filter_start = time.time()
             filtered_news = []
+            req_hit = 0
+            selenium_fallback_hit = 0
             for news in unique_news:
                 content = news.get('content', '')
                 if not content or len(content) < min_content_length:
-                    content = self.fetch_news_content(news['link'])
+                    content, used_selenium = self.fetch_news_content(news['link'], fallback_driver=(driver if use_shared else None), return_meta=True)
+                    if content:
+                        if used_selenium:
+                            selenium_fallback_hit += 1
+                        else:
+                            req_hit += 1
                 content_len = len(content) if content else 0
                 if content_len >= min_content_length:
                     news['content'] = content
                     filtered_news.append(news)
             unique_news = filtered_news
+            filter_elapsed = time.time() - filter_start
+            print(f"  正文过滤耗时: {filter_elapsed:.2f}s | requests命中: {req_hit} | selenium回退命中: {selenium_fallback_hit}")
         
         print(f"  共获取 {len(unique_news)} 条新闻")
         return unique_news
     
-    def fetch_news_content(self, url):
+    def fetch_news_content(self, url, fallback_driver=None, return_meta=False):
         """
         获取新闻详情页的正文内容
         :param url: 新闻链接
         :return: 正文内容
         """
-        # 使用Selenium获取内容（该网站有WAF）
-        driver = self._init_driver()
+        for attempt in range(2):
+            try:
+                response = self.session.get(
+                    url,
+                    headers=self.headers,
+                    timeout=12,
+                    verify=False,
+                    proxies={'http': None, 'https': None}
+                )
+                if response.status_code != 200:
+                    continue
+                response.encoding = response.apparent_encoding or 'utf-8'
+                soup = BeautifulSoup(response.text, 'html.parser')
+                for td in soup.select('td[id^="postmessage_"]'):
+                    content = td.get_text(separator='\n', strip=True)
+                    if content and len(content) > 50:
+                        return (content, False) if return_meta else content
+                for selector in ['td.portal_content', '#article-content', '.t_f', '.message', '.article-content', '.post-content']:
+                    content_div = soup.select_one(selector)
+                    if not content_div:
+                        continue
+                    for tag in content_div.find_all(['script', 'style', 'iframe']):
+                        tag.decompose()
+                    paragraphs = content_div.find_all('p')
+                    if paragraphs:
+                        content = '\n'.join([p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)])
+                    else:
+                        content = content_div.get_text(separator='\n', strip=True)
+                    if content and len(content) > 50:
+                        return (content, False) if return_meta else content
+            except Exception:
+                pass
+        driver = fallback_driver if fallback_driver is not None else self._init_driver()
         if not driver:
-            return ''
+            return ('', False) if return_meta else ''
         
         try:
             driver.get(url)
@@ -309,7 +376,7 @@ class EEChinaNewsCrawler:
                 if td_id.startswith('postmessage_'):
                     content = td.get_text(separator='\n', strip=True)
                     if content and len(content) > 50:
-                        return content
+                        return (content, True) if return_meta else content
             
             for selector in content_selectors:
                 content_div = soup.select_one(selector)
@@ -326,18 +393,19 @@ class EEChinaNewsCrawler:
                         content = content_div.get_text(separator='\n', strip=True)
                     
                     if content and len(content) > 50:
-                        return content
+                        return (content, True) if return_meta else content
             
-            return ''
+            return ('', True) if return_meta else ''
             
         except Exception as e:
             print(f"  获取内容出错: {e}")
-            return ''
+            return ('', True) if return_meta else ''
         finally:
-            try:
-                driver.quit()
-            except:
-                pass
+            if fallback_driver is None:
+                try:
+                    driver.quit()
+                except:
+                    pass
     
     def save_to_json(self, news_list, filename=None):
         """保存新闻列表到JSON文件"""

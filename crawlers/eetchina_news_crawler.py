@@ -7,6 +7,7 @@
 
 import os
 import sys
+import requests
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -33,6 +34,12 @@ class EETChinaNewsCrawler:
     
     def __init__(self, keyword="eda"):
         self.keyword = keyword
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'Referer': self.BASE_URL + '/',
+        }
     
     def _init_driver(self, suppress_warning=True):
         """初始化Chrome驱动"""
@@ -252,7 +259,36 @@ class EETChinaNewsCrawler:
         :param url: 新闻链接
         :return: 正文内容
         """
-        # 使用Selenium获取内容（该网站requests容易超时）
+        for attempt in range(2):
+            try:
+                response = requests.get(
+                    url,
+                    headers=self.headers,
+                    timeout=12,
+                    verify=False,
+                    proxies={'http': None, 'https': None}
+                )
+                if response.status_code != 200:
+                    continue
+                response.encoding = response.apparent_encoding or 'utf-8'
+                soup = BeautifulSoup(response.text, 'html.parser')
+                for tag in soup.select('.partner-content, .recommend, .hot-article, .related, aside, .sidebar, .ad, .share, .comment'):
+                    tag.decompose()
+                for selector in ['.article-con', '.article-detail', '.article-detail-content', '.article-content', '.detail-content', '.news-content', '.article-body', '#article-content']:
+                    content_div = soup.select_one(selector)
+                    if not content_div:
+                        continue
+                    for tag in content_div.find_all(['script', 'style', 'iframe', 'nav', 'footer']):
+                        tag.decompose()
+                    paragraphs = content_div.find_all('p')
+                    if paragraphs:
+                        content = '\n'.join([p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)])
+                    else:
+                        content = content_div.get_text(separator='\n', strip=True)
+                    if content and len(content) > 50:
+                        return content
+            except Exception:
+                pass
         driver = self._init_driver()
         if not driver:
             return ''
