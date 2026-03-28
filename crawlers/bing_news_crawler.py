@@ -27,7 +27,9 @@ os.environ['WDM_SSL_VERIFY'] = '0'
 os.environ['WDM_OFFLINE'] = '1'
 os.environ['NO_PROXY'] = '*'
 os.environ['no_proxy'] = '*'
-for _name in ['WDM', 'webdriver_manager', 'webdriver_manager.core', 'urllib3']:
+# 禁用 selenium-manager 自动下载
+os.environ['SE_MANAGER_DISABLED'] = '1'
+for _name in ['WDM', 'webdriver_manager', 'webdriver_manager.core', 'urllib3', 'selenium.webdriver.common.selenium_manager']:
     logging.getLogger(_name).setLevel(logging.CRITICAL)
     logging.getLogger(_name).propagate = False
     logging.getLogger(_name).disabled = True
