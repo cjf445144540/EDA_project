@@ -607,12 +607,12 @@ class BingNewsCrawler:
                 service = Service(driver_path)
                 driver = webdriver.Chrome(service=service, options=chrome_options)
             else:
+                # 尝试不指定 service 直接创建
                 try:
-                    from webdriver_manager.chrome import ChromeDriverManager
-                    service = Service(ChromeDriverManager().install())
-                    driver = webdriver.Chrome(service=service, options=chrome_options)
-                except Exception:
                     driver = webdriver.Chrome(options=chrome_options)
+                except Exception:
+                    print("  无法创建 Chrome driver")
+                    return []
             
             for page_num in range(1, max_pages + 1):
                 try:

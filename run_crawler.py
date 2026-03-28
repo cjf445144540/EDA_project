@@ -70,6 +70,33 @@ LAOYAOBA_CONFIG = {
     'keywords': ['EDA', 'synopsys', '新思科技', 'cadence'],  # 支持多个关键词
 }
 
+# design news 新闻配置
+DESIGNNEWS_CONFIG = {
+    'enabled': True,
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+    'min_content_length': 0,
+    'keywords': ['EDA', 'synopsys'],
+}
+
+# digitimes 新闻配置
+DIGITIMES_CONFIG = {
+    'enabled': True,
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+    'min_content_length': 0,
+    'keywords': ['EDA', 'synopsys'],
+}
+
+# 东方财富网 新闻配置
+EASTMONEY_CONFIG = {
+    'enabled': True,
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+    'min_content_length': DEFAULT_MIN_CONTENT_LENGTH,
+    'keywords': ['EDA', 'synopsys', '新思科技'],
+}
+
 # 同花顺个股新闻配置
 THS_CONFIG = {
     'enabled': True,  # 是否启用
@@ -78,6 +105,21 @@ THS_CONFIG = {
         "688206",  # 概伦电子
         "301095"   # 广立微
     ],
+    'days': DEFAULT_DAYS,
+}
+
+# 深圳电子商会新闻配置
+SECCW_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+    'keyword': 'EDA',
+}
+
+# 全球半导体观察新闻配置
+DRAMX_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
     'days': DEFAULT_DAYS,
 }
 
@@ -104,21 +146,6 @@ UNIVISTA_CONFIG = {
 
 # 芯华章官网新闻配置
 XEPIC_CONFIG = {
-    'enabled': True,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-}
-
-# 深圳电子商会新闻配置
-SECCW_CONFIG = {
-    'enabled': True,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-    'keyword': 'EDA',
-}
-
-# 全球半导体观察新闻配置
-DRAMX_CONFIG = {
     'enabled': True,  # 是否启用
     'max_pages': DEFAULT_MAX_PAGES,
     'days': DEFAULT_DAYS,
@@ -324,18 +351,10 @@ def create_chrome_driver(chrome_options):
     # 尝试不指定 service 直接创建
     try:
         return webdriver.Chrome(options=chrome_options)
-    except Exception:
-        pass
-    
-    # 最后才使用 webdriver_manager（延迟导入）
-    try:
-        from webdriver_manager.chrome import ChromeDriverManager
-        service = Service(ChromeDriverManager().install())
-        return webdriver.Chrome(service=service, options=chrome_options)
     except Exception as e:
         raise RuntimeError(f"Failed to create Chrome driver: {e}")
 
-from crawlers import THSNewsCrawler, SemitronixNewsCrawler, PrimariusNewsCrawler, UnivistiaNewsCrawler, XepicNewsCrawler, SeccwNewsCrawler, DramxNewsCrawler, SynopsysNewsCrawler, CadenceNewsCrawler, SiemensNewsCrawler, EETimesNewsCrawler, S2CNewsCrawler, GigaDANewsCrawler, XpedicNewsCrawler, SinaNewsCrawler, QQNewsCrawler, SohuNewsCrawler, BingNewsCrawler, IWenCaiNewsCrawler, LaoyaobaNewsCrawler, EEChinaNewsCrawler, EETChinaNewsCrawler, EEWorldNewsCrawler
+from crawlers import THSNewsCrawler, SemitronixNewsCrawler, PrimariusNewsCrawler, UnivistiaNewsCrawler, XepicNewsCrawler, SeccwNewsCrawler, DramxNewsCrawler, SynopsysNewsCrawler, CadenceNewsCrawler, SiemensNewsCrawler, EETimesNewsCrawler, S2CNewsCrawler, GigaDANewsCrawler, XpedicNewsCrawler, SinaNewsCrawler, QQNewsCrawler, SohuNewsCrawler, BingNewsCrawler, IWenCaiNewsCrawler, LaoyaobaNewsCrawler, DesignNewsCrawler, DigitimesNewsCrawler, EastmoneyNewsCrawler, EEChinaNewsCrawler, EETChinaNewsCrawler, EEWorldNewsCrawler
 from classify_news import NewsClassifier
 from auto_news_writer import get_first_news_link, fetch_news_content, copy_to_clipboard
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -372,6 +391,9 @@ COMPANY_NAMES = {
     "bing": "行业新闻",  # Bing新闻
     "iwencai": "行业新闻",  # 问财网
     "laoyaoba": "行业新闻",  # 集微网
+    "designnews": "行业新闻",  # Design News
+    "digitimes": "行业新闻",  # DIGITIMES
+    "eastmoney": "行业新闻",  # 东方财富网
     "eechina": "行业新闻",  # 电子工程网
     "eetchina": "行业新闻",  # 电子工程专辑
     "eeworld": "行业新闻",  # 电子工程世界
@@ -1169,6 +1191,120 @@ def run_laoyaoba_crawler(config):
         return {}
 
 
+def run_designnews_crawler(config):
+    if not config.get('enabled', False):
+        return {}
+
+    print("\n" + "="*50)
+    print("Design News 爬虫")
+    print("="*50)
+
+    max_pages = config.get('max_pages', 1)
+    days = config.get('days', 7)
+    min_content_length = config.get('min_content_length', 0)
+    keywords = config.get('keywords', [])
+    if not keywords:
+        keywords = [config.get('keyword', 'EDA')]
+
+    try:
+        crawler = DesignNewsCrawler(keyword=keywords[0])
+        news_list = crawler.crawl(
+            max_pages=max_pages,
+            days=days,
+            min_content_length=min_content_length,
+            keywords=keywords
+        )
+        crawler.save_to_json(news_list)
+        result = {}
+        if news_list:
+            result['designnews'] = {
+                'source': 'Design News',
+                'count': len(news_list),
+                'news': news_list
+            }
+        print(f"[OK] Design News 爬取完成，获取 {len(news_list)} 条新闻（最近{days}天，关键词: {', '.join(keywords)}）")
+        return result
+    except Exception as e:
+        print(f"[ERR] Design News 爬取失败: {e}")
+        return {}
+
+
+def run_digitimes_crawler(config):
+    if not config.get('enabled', False):
+        return {}
+
+    print("\n" + "="*50)
+    print("DIGITIMES 爬虫")
+    print("="*50)
+
+    max_pages = config.get('max_pages', 1)
+    days = config.get('days', 7)
+    min_content_length = config.get('min_content_length', 0)
+    keywords = config.get('keywords', [])
+    if not keywords:
+        keywords = [config.get('keyword', 'EDA')]
+
+    try:
+        crawler = DigitimesNewsCrawler(keyword=keywords[0])
+        news_list = crawler.crawl(
+            max_pages=max_pages,
+            days=days,
+            min_content_length=min_content_length,
+            keywords=keywords
+        )
+        crawler.save_to_json(news_list)
+        result = {}
+        if news_list:
+            result['digitimes'] = {
+                'source': 'DIGITIMES',
+                'count': len(news_list),
+                'news': news_list
+            }
+        print(f"[OK] DIGITIMES 爬取完成，获取 {len(news_list)} 条新闻（最近{days}天，关键词: {', '.join(keywords)}）")
+        return result
+    except Exception as e:
+        print(f"[ERR] DIGITIMES 爬取失败: {e}")
+        return {}
+
+
+def run_eastmoney_crawler(config):
+    if not config.get('enabled', False):
+        return {}
+
+    print("\n" + "="*50)
+    print("东方财富网爬虫")
+    print("="*50)
+
+    max_pages = config.get('max_pages', 1)
+    days = config.get('days', 7)
+    min_content_length = config.get('min_content_length', 0)
+    keywords = config.get('keywords', [])
+    if not keywords:
+        keywords = [config.get('keyword', 'EDA')]
+
+    try:
+        crawler = EastmoneyNewsCrawler(keyword=keywords[0])
+        news_list = crawler.crawl(
+            max_pages=max_pages,
+            days=days,
+            min_content_length=min_content_length,
+            keywords=keywords
+        )
+        crawler.save_to_json(news_list)
+        result = {}
+        if news_list:
+            result['eastmoney'] = {
+                'source': '东方财富网',
+                'count': len(news_list),
+                'news': news_list
+            }
+        print(f"[OK] 东方财富网 爬取完成，获取 {len(news_list)} 条新闻（最近{days}天，关键词: {', '.join(keywords)}）")
+        return result
+    except Exception as e:
+        print(f"[ERR] 东方财富网 爬取失败: {e}")
+        return {}
+
+
 def run_eechina_crawler(config):
     """运行电子工程网新闻爬虫"""
     if not config.get('enabled', False):
@@ -1422,6 +1558,9 @@ def main():
         ("Bing新闻", run_bing_crawler, BING_CONFIG),
         ("问财网", run_iwencai_crawler, IWENCAI_CONFIG),
         ("集微网", run_laoyaoba_crawler, LAOYAOBA_CONFIG),
+        ("Design News", run_designnews_crawler, DESIGNNEWS_CONFIG),
+        ("DIGITIMES", run_digitimes_crawler, DIGITIMES_CONFIG),
+        ("东方财富网", run_eastmoney_crawler, EASTMONEY_CONFIG),
         # 以下使用Selenium的爬虫，会顺序执行
     ]
     
@@ -1642,7 +1781,7 @@ def main():
         classifier = NewsClassifier()
         target_categories = ["财务相关", "战略合作", "技术研发", "行业分析"]
         skip_sources = ["EETimes"]  # EETimes已用synopsys/cadence/siemens搜索，直接保留
-        category_only_sources = ["广立微官网", "概伦电子官网", "合见工软官网", "芯华章官网", "深圳电子商会", "全球半导体观察", "思尔芯官网", "鸿芯微纳官网", "芯和半导体官网", "新浪网", "腾讯网", "搜狐网", "Bing新闻", "问财网", "集微网", "电子工程网", "电子工程专辑", "电子工程世界"]  # 公司官网和行业新闻只做分类筛选，不限公司相关
+        category_only_sources = ["广立微官网", "概伦电子官网", "合见工软官网", "芯华章官网", "深圳电子商会", "全球半导体观察", "思尔芯官网", "鸿芯微纳官网", "芯和半导体官网", "新浪网", "腾讯网", "搜狐网", "Bing新闻", "问财网", "集微网", "Design News", "DIGITIMES", "东方财富网", "电子工程网", "电子工程专辑", "电子工程世界"]  # 公司官网和行业新闻只做分类筛选，不限公司相关
         company_only_sources = ["SemiWiki", "Design-Reuse", "Synopsys官网", "Cadence官网", "Siemens官网"]  # 只做公司相关筛选，不做分类筛选
         
         print(f"\n过滤规则:")
@@ -1733,6 +1872,9 @@ def main():
         bing_crawler = BingNewsCrawler()
         iwencai_crawler = IWenCaiNewsCrawler()
         laoyaoba_crawler = LaoyaobaNewsCrawler()
+        designnews_crawler = DesignNewsCrawler()
+        digitimes_crawler = DigitimesNewsCrawler()
+        eastmoney_crawler = EastmoneyNewsCrawler()
         
         # 收集所有需要获取内容的新闻
         all_news_items = []
@@ -1815,6 +1957,12 @@ def main():
                     content = iwencai_crawler.fetch_news_content(news['link'])
                 elif source_name == "集微网":
                     content = laoyaoba_crawler.fetch_news_content(news['link'])
+                elif source_name == "Design News":
+                    content = designnews_crawler.fetch_news_content(news['link'])
+                elif source_name == "DIGITIMES":
+                    content = digitimes_crawler.fetch_news_content(news['link'])
+                elif source_name == "东方财富网":
+                    content = eastmoney_crawler.fetch_news_content(news['link'])
                 else:
                     content = fetch_news_content(news['link'])
                 content_len = len(content) if content else 0
@@ -1883,7 +2031,6 @@ def main():
                     from selenium import webdriver
                     from selenium.webdriver.chrome.options import Options
                     from selenium.webdriver.chrome.service import Service
-                    from webdriver_manager.chrome import ChromeDriverManager
                     
                     chrome_options = Options()
                     chrome_options.add_argument('--headless=new')

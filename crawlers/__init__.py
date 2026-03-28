@@ -15,6 +15,9 @@ from .qq_news_crawler import QQNewsCrawler
 from .bing_news_crawler import BingNewsCrawler
 from .iwencai_news_crawler import IWenCaiNewsCrawler
 from .laoyaoba_news_crawler import LaoyaobaNewsCrawler
+from .designnews_news_crawler import DesignNewsCrawler
+from .digitimes_news_crawler import DigitimesNewsCrawler
+from .eastmoney_news_crawler import EastmoneyNewsCrawler
 from .eechina_news_crawler import EEChinaNewsCrawler
 from .eetchina_news_crawler import EETChinaNewsCrawler
 from .eeworld_news_crawler import EEWorldNewsCrawler
@@ -45,6 +48,9 @@ __all__ = [
     'BingNewsCrawler',
     'IWenCaiNewsCrawler',
     'LaoyaobaNewsCrawler',
+    'DesignNewsCrawler',
+    'DigitimesNewsCrawler',
+    'EastmoneyNewsCrawler',
     'EEChinaNewsCrawler',
     'EETChinaNewsCrawler',
     'EEWorldNewsCrawler',
