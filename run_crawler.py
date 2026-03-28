@@ -2329,6 +2329,70 @@ def main():
                 'content': item['content'],
                 'content_len': content_len
             })
+
+        # 将“行业新闻”按标题归并到对应公司，无法归并的保留在“行业新闻”
+        company_aliases = {
+            "Synopsys": ["synopsys", "新思科技", "新思", "snps"],
+            "Cadence": ["cadence", "铿腾电子", "楷登", "cdns"],
+            "Siemens": ["siemens", "西门子", "mentor"],
+            "华大九天": ["华大九天", "empyrean"],
+            "概伦电子": ["概伦电子", "primarius"],
+            "广立微": ["广立微", "semitronix"],
+            "合见工软": ["合见工软", "univista"],
+            "芯华章": ["芯华章", "x-epic", "xepic"],
+            "思尔芯": ["思尔芯", "s2c"],
+            "鸿芯微纳": ["鸿芯微纳", "gigada"],
+            "芯和半导体": ["芯和半导体", "xpeedic"],
+        }
+
+        def match_company_by_title(title_text):
+            text = (title_text or '').lower()
+            best_company = ''
+            best_len = 0
+            for company, aliases in company_aliases.items():
+                for alias in aliases:
+                    if alias and alias.lower() in text:
+                        if len(alias) > best_len:
+                            best_len = len(alias)
+                            best_company = company
+            return best_company
+
+        industry_sources = news_by_company.get("行业新闻", {})
+        if industry_sources:
+            moved_items = {}
+            remained_sources = {}
+            moved_count = 0
+            for source_name, news_items in industry_sources.items():
+                remained_items = []
+                for item in news_items:
+                    title = item.get('news', {}).get('title', '')
+                    matched_company = match_company_by_title(title)
+                    if matched_company:
+                        if matched_company not in moved_items:
+                            moved_items[matched_company] = {}
+                        if source_name not in moved_items[matched_company]:
+                            moved_items[matched_company][source_name] = []
+                        moved_items[matched_company][source_name].append(item)
+                        moved_count += 1
+                    else:
+                        remained_items.append(item)
+                if remained_items:
+                    remained_sources[source_name] = remained_items
+
+            for company_name, sources in moved_items.items():
+                if company_name not in news_by_company:
+                    news_by_company[company_name] = {}
+                for source_name, news_items in sources.items():
+                    if source_name not in news_by_company[company_name]:
+                        news_by_company[company_name][source_name] = []
+                    news_by_company[company_name][source_name].extend(news_items)
+
+            if remained_sources:
+                news_by_company["行业新闻"] = remained_sources
+            else:
+                news_by_company.pop("行业新闻", None)
+
+            print(f"  行业新闻标题归并完成: 归并 {moved_count} 条，未归并 {sum(len(v) for v in remained_sources.values()) if remained_sources else 0} 条")
         
         # 清除检查进度提示
         print(" " * 60, end="\r")
