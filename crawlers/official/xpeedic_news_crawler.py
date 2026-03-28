@@ -10,6 +10,7 @@ import json
 import os
 import urllib3
 import re
+from urllib.parse import urlparse, parse_qs
 from datetime import datetime, timedelta
 
 # 禁用 SSL 警告
@@ -29,6 +30,47 @@ class XpedicNewsCrawler:
             'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
             'Referer': 'https://www.xpeedic.com/',
         }
+
+    def _normalize_news_url(self, url):
+        try:
+            parsed = urlparse(url)
+            qs = parse_qs(parsed.query)
+            keep = ['m', 'c', 'a', 'catid', 'id']
+            norm_qs = '&'.join([f"{k}={qs.get(k, [''])[0]}" for k in keep if qs.get(k, [''])[0]])
+            if norm_qs:
+                return f"{self.BASE_URL}/index.php?{norm_qs}"
+            return url.strip()
+        except Exception:
+            return (url or '').strip()
+
+    def _merge_clean_lines(self, lines):
+        cleaned = []
+        seen = set()
+        for line in lines:
+            text = re.sub(r'\s+', ' ', (line or '').replace('\u3000', ' ')).strip()
+            if not text:
+                continue
+            if len(text) < 8:
+                continue
+            key = text.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            cleaned.append(text)
+        short_lines = [x for x in cleaned if len(x) <= 300]
+        result = []
+        for x in cleaned:
+            if len(x) > 600:
+                hit = 0
+                for s in short_lines:
+                    if s != x and s in x:
+                        hit += 1
+                        if hit >= 3:
+                            break
+                if hit >= 3:
+                    continue
+            result.append(x)
+        return '\n'.join(result)
 
     def crawl(self, max_pages=1, days=7):
         """
@@ -111,7 +153,7 @@ class XpedicNewsCrawler:
                     
                     all_news.append({
                         'title': title,
-                        'link': full_url,
+                        'link': self._normalize_news_url(full_url),
                         'date': date,
                         'source': '芯和半导体官网',
                     })
@@ -170,12 +212,12 @@ class XpedicNewsCrawler:
                         # 尝试从 <p> 标签获取
                         paragraphs = content_elem.find_all('p')
                         if paragraphs:
-                            content = '\n'.join([p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)])
+                            content = self._merge_clean_lines([p.get_text(" ", strip=True) for p in paragraphs])
                             if content and len(content) > 50:
                                 return content
                         
                         # 没有 <p> 时直接取文本
-                        text = content_elem.get_text(separator='\n', strip=True)
+                        text = self._merge_clean_lines(content_elem.get_text(separator='\n', strip=True).split('\n'))
                         if text and len(text) > 50:
                             return text
 
@@ -189,7 +231,7 @@ class XpedicNewsCrawler:
                     # 查找所有段落
                     paragraphs = body.find_all('p')
                     if paragraphs:
-                        content = '\n'.join([p.get_text(strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 20])
+                        content = self._merge_clean_lines([p.get_text(" ", strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 20])
                         if content and len(content) > 100:
                             return content
 

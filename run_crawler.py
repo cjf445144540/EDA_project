@@ -7,10 +7,212 @@
 - 未来可继续添加其他爬虫...
 """
 
+# ========================================
+# 全局配置（统一修改所有爬虫的默认值）
+# ========================================
+DEFAULT_DAYS = 7        # 默认爬取最近几天的新闻
+DEFAULT_MAX_PAGES = 1   # 默认最大爬取页数
+DEFAULT_MIN_CONTENT_LENGTH = 500  # 默认正文最小字数
+
+# ========================================
+# 爬虫配置（在这里添加新的爬虫配置）
+# ========================================
+
+
+# 新浪网 新闻配置
+SINA_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+    'keyword': 'EDA',
+}
+
+# 腾讯网 新闻配置
+QQ_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+    'keyword': 'EDA',
+}
+
+# 搜狐网 新闻配置
+SOHU_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': 3,  # 搜狐搜索结果不按时间排序，需多爬几页
+    'days': DEFAULT_DAYS,
+    'keyword': 'EDA',
+}
+
+# Bing 新闻配置
+BING_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+    'min_content_length': DEFAULT_MIN_CONTENT_LENGTH,
+    'keyword': 'EDA',  # 使用 EDA 关键词获取更多新闻
+}
+
+# 问财网 新闻配置（已禁用：网站反爬虫限制，需要登录）
+IWENCAI_CONFIG = {
+    'enabled': False,  # 禁用：问财网有严格的反爬虫限制
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+    'min_content_length': 100,
+    'keywords': ['EDA', 'synopsys', '新思科技', 'cadence'],
+}
+
+# 集微网 新闻配置
+LAOYAOBA_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+    'min_content_length': 100,
+    'keywords': ['EDA', 'synopsys', '新思科技', 'cadence'],  # 支持多个关键词
+}
+
+# 同花顺个股新闻配置
+THS_CONFIG = {
+    'enabled': True,  # 是否启用
+    'stocks': [
+        "301269",  # 华大九天
+        "688206",  # 概伦电子
+        "301095"   # 广立微
+    ],
+    'days': DEFAULT_DAYS,
+}
+
+# 广立微官网新闻配置
+SEMITRONIX_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+}
+
+# 概伦电子官网新闻配置
+PRIMARIUS_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+}
+
+# 合见工软官网新闻配置
+UNIVISTA_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+}
+
+# 芯华章官网新闻配置
+XEPIC_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+}
+
+# 深圳电子商会新闻配置
+SECCW_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+    'keyword': 'EDA',
+}
+
+# 全球半导体观察新闻配置
+DRAMX_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+}
+
+# Synopsys 新闻配置
+SYNOPSYS_CONFIG = {
+    'enabled': False,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+}
+
+# Cadence 新闻配置
+CADENCE_CONFIG = {
+    'enabled': False,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+}
+
+# Siemens 新闻配置
+SIEMENS_CONFIG = {
+    'enabled': False,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+}
+
+# EETimes 新闻配置
+EETIMES_CONFIG = {
+    'enabled': True,   # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+    'keywords': ['synopsys', 'cadence', 'siemens', 'EDA'],
+}
+
+# 思尔芯 新闻配置
+S2C_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+}
+
+# 鸿芯微纳 新闻配置
+GIGADA_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+}
+
+# 芯和半导体 新闻配置
+XPEEDIC_CONFIG = {
+    'enabled': True,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+}
+
+# 电子工程网 新闻配置
+EECHINA_CONFIG = {
+    'enabled': False,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+    'min_content_length': DEFAULT_MIN_CONTENT_LENGTH,
+    'keyword': 'EDA',
+}
+
+# 电子工程专辑（eet-china.com）
+EETCHINA_CONFIG = {
+    'enabled': False,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+    'min_content_length': DEFAULT_MIN_CONTENT_LENGTH,
+    'keyword': 'eda',
+}
+
+# 电子工程世界（eeworld.com.cn）
+EEWORLD_CONFIG = {
+    'enabled': False,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+    'min_content_length': DEFAULT_MIN_CONTENT_LENGTH,
+    'keyword': 'EDA',
+}
+
+# 未来可以继续添加其他爬虫配置...
+# OTHER_CRAWLER_CONFIG = {
+#     'enabled': False,
+#     ...
+# }
+
+
 import os
 import sys
 import logging
 import contextlib
+from glob import glob
 
 # 静默模式：减少日志输出，只显示关键信息
 QUIET_MODE = False  # 关闭静默模式，保留爬取日志
@@ -21,6 +223,9 @@ os.environ['WDM_LOG'] = '0'
 os.environ['WDM_LOG_LEVEL'] = '0'
 os.environ['WDM_LOCAL'] = '1'  # 优先使用本地缓存，不检查更新
 os.environ['WDM_SSL_VERIFY'] = '0'
+os.environ['WDM_OFFLINE'] = '1'  # 完全禁用网络请求，使用本地缓存
+os.environ['NO_PROXY'] = '*'
+os.environ['no_proxy'] = '*'
 for _name in ['WDM', 'webdriver_manager', 'webdriver_manager.core', 'urllib3']:
     logging.getLogger(_name).setLevel(logging.CRITICAL)
     logging.getLogger(_name).propagate = False
@@ -88,29 +293,55 @@ def format_console_message(msg):
 def create_chrome_driver(chrome_options):
     from selenium import webdriver
     from selenium.webdriver.chrome.service import Service
-    from webdriver_manager.chrome import ChromeDriverManager
-    with open(os.devnull, 'w') as _null, contextlib.redirect_stdout(_null), contextlib.redirect_stderr(_null):
-        try:
-            return webdriver.Chrome(options=chrome_options)
-        except Exception:
-            service = Service(ChromeDriverManager().install())
-            return webdriver.Chrome(service=service, options=chrome_options)
 
-from crawlers import THSNewsCrawler, SemitronixNewsCrawler, PrimariusNewsCrawler, UnivistiaNewsCrawler, XepicNewsCrawler, SeccwNewsCrawler, DramxNewsCrawler, SynopsysNewsCrawler, CadenceNewsCrawler, SiemensNewsCrawler, EETimesNewsCrawler, S2CNewsCrawler, GigaDANewsCrawler, XpedicNewsCrawler, SinaNewsCrawler, QQNewsCrawler, SohuNewsCrawler, EEChinaNewsCrawler, EETChinaNewsCrawler, EEWorldNewsCrawler
+    def find_local_chromedriver():
+        roots = [
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), '.wdm', 'drivers', 'chromedriver'),
+            os.path.join(os.getcwd(), '.wdm', 'drivers', 'chromedriver'),
+            os.path.join(os.path.expanduser('~'), '.wdm', 'drivers', 'chromedriver'),
+        ]
+        candidates = []
+        for root in roots:
+            if not os.path.isdir(root):
+                continue
+            candidates.extend(glob(os.path.join(root, '**', 'chromedriver.exe'), recursive=True))
+            candidates.extend(glob(os.path.join(root, '**', 'chromedriver'), recursive=True))
+        candidates = [p for p in candidates if os.path.isfile(p)]
+        if not candidates:
+            return ''
+        candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+        return candidates[0]
+
+    # 优先使用本地缓存的 chromedriver
+    local_driver = find_local_chromedriver()
+    if local_driver:
+        try:
+            service = Service(local_driver)
+            return webdriver.Chrome(service=service, options=chrome_options)
+        except Exception:
+            pass
+    
+    # 尝试不指定 service 直接创建
+    try:
+        return webdriver.Chrome(options=chrome_options)
+    except Exception:
+        pass
+    
+    # 最后才使用 webdriver_manager（延迟导入）
+    try:
+        from webdriver_manager.chrome import ChromeDriverManager
+        service = Service(ChromeDriverManager().install())
+        return webdriver.Chrome(service=service, options=chrome_options)
+    except Exception as e:
+        raise RuntimeError(f"Failed to create Chrome driver: {e}")
+
+from crawlers import THSNewsCrawler, SemitronixNewsCrawler, PrimariusNewsCrawler, UnivistiaNewsCrawler, XepicNewsCrawler, SeccwNewsCrawler, DramxNewsCrawler, SynopsysNewsCrawler, CadenceNewsCrawler, SiemensNewsCrawler, EETimesNewsCrawler, S2CNewsCrawler, GigaDANewsCrawler, XpedicNewsCrawler, SinaNewsCrawler, QQNewsCrawler, SohuNewsCrawler, BingNewsCrawler, IWenCaiNewsCrawler, LaoyaobaNewsCrawler, EEChinaNewsCrawler, EETChinaNewsCrawler, EEWorldNewsCrawler
 from classify_news import NewsClassifier
 from auto_news_writer import get_first_news_link, fetch_news_content, copy_to_clipboard
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import pyperclip
 import json
 from datetime import datetime, timedelta
-
-
-# ========================================
-# 全局配置（统一修改所有爬虫的默认值）
-# ========================================
-DEFAULT_DAYS = 7        # 默认爬取最近几天的新闻
-DEFAULT_MAX_PAGES = 1   # 默认最大爬取页数
-DEFAULT_MIN_CONTENT_LENGTH = 500  # 默认正文最小字数
 
 
 # ========================================
@@ -138,175 +369,14 @@ COMPANY_NAMES = {
     "sina": "行业新闻",  # 新浪网
     "qq": "行业新闻",  # 腾讯网
     "sohu": "行业新闻",  # 搜狐网
+    "bing": "行业新闻",  # Bing新闻
+    "iwencai": "行业新闻",  # 问财网
+    "laoyaoba": "行业新闻",  # 集微网
     "eechina": "行业新闻",  # 电子工程网
     "eetchina": "行业新闻",  # 电子工程专辑
     "eeworld": "行业新闻",  # 电子工程世界
 }
 
-# ========================================
-# 爬虫配置（在这里添加新的爬虫配置）
-# ========================================
-
-# 同花顺个股新闻配置
-THS_CONFIG = {
-    'enabled': True,  # 是否启用
-    'stocks': [
-        "301269",  # 华大九天
-        "688206",  # 概伦电子
-        "301095"   # 广立微
-    ],
-    'days': DEFAULT_DAYS,
-}
-
-# 广立微官网新闻配置
-SEMITRONIX_CONFIG = {
-    'enabled': True,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-}
-
-# 概伦电子官网新闻配置
-PRIMARIUS_CONFIG = {
-    'enabled': True,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-}
-
-# 合见工软官网新闻配置
-UNIVISTA_CONFIG = {
-    'enabled': True,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-}
-
-# 芯华章官网新闻配置
-XEPIC_CONFIG = {
-    'enabled': True,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-}
-
-# 深圳电子商会新闻配置
-SECCW_CONFIG = {
-    'enabled': True,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-    'keyword': 'EDA',
-}
-
-# 全球半导体观察新闻配置
-DRAMX_CONFIG = {
-    'enabled': True,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-}
-
-# Synopsys 新闻配置
-SYNOPSYS_CONFIG = {
-    'enabled': True,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-}
-
-# Cadence 新闻配置
-CADENCE_CONFIG = {
-    'enabled': True,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-}
-
-# Siemens 新闻配置
-SIEMENS_CONFIG = {
-    'enabled': True,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-}
-
-# EETimes 新闻配置
-EETIMES_CONFIG = {
-    'enabled': True,   # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-    'keywords': ['synopsys', 'cadence', 'siemens', 'EDA'],
-}
-
-# 思尔芯 新闻配置
-S2C_CONFIG = {
-    'enabled': True,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-}
-
-# 鸿芯微纳 新闻配置
-GIGADA_CONFIG = {
-    'enabled': True,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-}
-
-# 芯和半导体 新闻配置
-XPEEDIC_CONFIG = {
-    'enabled': True,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-}
-
-# 新浪网 新闻配置
-SINA_CONFIG = {
-    'enabled': True,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-    'keyword': 'EDA',
-}
-
-# 腾讯网 新闻配置
-QQ_CONFIG = {
-    'enabled': True,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-    'keyword': 'EDA',
-}
-
-# 搜狐网 新闻配置
-SOHU_CONFIG = {
-    'enabled': True,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-    'keyword': 'EDA',
-}
-
-# 电子工程网 新闻配置
-EECHINA_CONFIG = {
-    'enabled': False,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-    'min_content_length': DEFAULT_MIN_CONTENT_LENGTH,
-    'keyword': 'EDA',
-}
-
-# 电子工程专辑（eet-china.com）
-EETCHINA_CONFIG = {
-    'enabled': False,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-    'min_content_length': DEFAULT_MIN_CONTENT_LENGTH,
-    'keyword': 'eda',
-}
-
-# 电子工程世界（eeworld.com.cn）
-EEWORLD_CONFIG = {
-    'enabled': False,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-    'min_content_length': DEFAULT_MIN_CONTENT_LENGTH,
-    'keyword': 'EDA',
-}
-
-# 未来可以继续添加其他爬虫配置...
-# OTHER_CRAWLER_CONFIG = {
-#     'enabled': False,
-#     ...
-# }
 
 def run_batch_crawl(stock_list, mode="today", start_date=None, end_date=None):
     """
@@ -959,6 +1029,146 @@ def run_sohu_crawler(config):
         return {}
 
 
+def run_bing_crawler(config):
+    """运行 Bing 新闻爬虫"""
+    if not config.get('enabled', False):
+        return {}
+
+    print("\n" + "="*50)
+    print("Bing 新闻爬虫")
+    print("="*50)
+
+    max_pages = config.get('max_pages', 1)
+    days = config.get('days', 7)
+    min_content_length = config.get('min_content_length', 0)
+    keyword = config.get('keyword', 'EDA')
+
+    try:
+        crawler = BingNewsCrawler(keyword=keyword)
+        news_list = crawler.crawl(max_pages=max_pages, days=days, min_content_length=min_content_length)
+        crawler.save_to_json(news_list)
+
+        result = {}
+        if news_list:
+            result['bing'] = {
+                'source': 'Bing新闻',
+                'count': len(news_list),
+                'news': news_list
+            }
+
+        print(f"[OK] Bing新闻 爬取完成，获取 {len(news_list)} 条新闻（最近{days}天）")
+        return result
+    except Exception as e:
+        print(f"[ERR] Bing新闻 爬取失败: {e}")
+        return {}
+
+
+def run_iwencai_crawler(config):
+    """运行问财网新闻爬虫，支持多关键词"""
+    if not config.get('enabled', False):
+        return {}
+
+    print("\n" + "="*50)
+    print("问财网新闻爬虫")
+    print("="*50)
+
+    max_pages = config.get('max_pages', 1)
+    days = config.get('days', 7)
+    min_content_length = config.get('min_content_length', 0)
+    
+    # 支持多关键词（兼容旧的单关键词配置）
+    keywords = config.get('keywords', [])
+    if not keywords:
+        keywords = [config.get('keyword', 'EDA')]
+
+    try:
+        all_news = []
+        seen_links = set()
+        
+        for keyword in keywords:
+            crawler = IWenCaiNewsCrawler(keyword=keyword)
+            news_list = crawler.crawl(max_pages=max_pages, days=days, min_content_length=min_content_length)
+            
+            # 去重
+            for news in news_list:
+                link = news.get('link', '')
+                if link and link not in seen_links:
+                    seen_links.add(link)
+                    all_news.append(news)
+        
+        # 保存合并后的结果
+        if all_news:
+            crawler = IWenCaiNewsCrawler(keyword=keywords[0])
+            crawler.save_to_json(all_news)
+
+        result = {}
+        if all_news:
+            result['iwencai'] = {
+                'source': '问财网',
+                'count': len(all_news),
+                'news': all_news
+            }
+
+        print(f"[OK] 问财网 爬取完成，获取 {len(all_news)} 条新闻（最近{days}天，关键词: {', '.join(keywords)}）")
+        return result
+    except Exception as e:
+        print(f"[ERR] 问财网 爬取失败: {e}")
+        return {}
+
+
+def run_laoyaoba_crawler(config):
+    """运行集微网新闻爬虫，支持多关键词"""
+    if not config.get('enabled', False):
+        return {}
+
+    print("\n" + "="*50)
+    print("集微网新闻爬虫")
+    print("="*50)
+
+    max_pages = config.get('max_pages', 2)
+    days = config.get('days', 30)
+    min_content_length = config.get('min_content_length', 0)
+    
+    # 支持多关键词（兼容旧的单关键词配置）
+    keywords = config.get('keywords', [])
+    if not keywords:
+        keywords = [config.get('keyword', 'EDA')]
+
+    try:
+        all_news = []
+        seen_links = set()
+        
+        for keyword in keywords:
+            crawler = LaoyaobaNewsCrawler(keyword=keyword)
+            news_list = crawler.crawl(max_pages=max_pages, days=days, min_content_length=min_content_length)
+            
+            # 去重
+            for news in news_list:
+                link = news.get('link', '')
+                if link and link not in seen_links:
+                    seen_links.add(link)
+                    all_news.append(news)
+        
+        # 保存合并后的结果
+        if all_news:
+            crawler = LaoyaobaNewsCrawler(keyword=keywords[0])
+            crawler.save_to_json(all_news)
+
+        result = {}
+        if all_news:
+            result['laoyaoba'] = {
+                'source': '集微网',
+                'count': len(all_news),
+                'news': all_news
+            }
+
+        print(f"[OK] 集微网 爬取完成，获取 {len(all_news)} 条新闻（最近{days}天，关键词: {', '.join(keywords)}）")
+        return result
+    except Exception as e:
+        print(f"[ERR] 集微网 爬取失败: {e}")
+        return {}
+
+
 def run_eechina_crawler(config):
     """运行电子工程网新闻爬虫"""
     if not config.get('enabled', False):
@@ -1090,6 +1300,10 @@ def convert_to_new_format(raw_results):
             company_name = "行业新闻"
         elif key == 'sohu':
             company_name = "行业新闻"
+        elif key == 'bing':
+            company_name = "行业新闻"
+        elif key == 'iwencai':
+            company_name = "行业新闻"
         elif key == 'eechina':
             company_name = "行业新闻"
         elif key == 'eetchina':
@@ -1205,6 +1419,9 @@ def main():
         ("鸿芯微纳", run_gigada_crawler, GIGADA_CONFIG),
         ("芯和半导体", run_xpeedic_crawler, XPEEDIC_CONFIG),
         ("新浪网", run_sina_crawler, SINA_CONFIG),
+        ("Bing新闻", run_bing_crawler, BING_CONFIG),
+        ("问财网", run_iwencai_crawler, IWENCAI_CONFIG),
+        ("集微网", run_laoyaoba_crawler, LAOYAOBA_CONFIG),
         # 以下使用Selenium的爬虫，会顺序执行
     ]
     
@@ -1425,7 +1642,7 @@ def main():
         classifier = NewsClassifier()
         target_categories = ["财务相关", "战略合作", "技术研发", "行业分析"]
         skip_sources = ["EETimes"]  # EETimes已用synopsys/cadence/siemens搜索，直接保留
-        category_only_sources = ["广立微官网", "概伦电子官网", "合见工软官网", "芯华章官网", "深圳电子商会", "全球半导体观察", "思尔芯官网", "鸿芯微纳官网", "芯和半导体官网", "新浪网", "腾讯网", "搜狐网", "电子工程网", "电子工程专辑", "电子工程世界"]  # 公司官网和行业新闻只做分类筛选，不限公司相关
+        category_only_sources = ["广立微官网", "概伦电子官网", "合见工软官网", "芯华章官网", "深圳电子商会", "全球半导体观察", "思尔芯官网", "鸿芯微纳官网", "芯和半导体官网", "新浪网", "腾讯网", "搜狐网", "Bing新闻", "问财网", "集微网", "电子工程网", "电子工程专辑", "电子工程世界"]  # 公司官网和行业新闻只做分类筛选，不限公司相关
         company_only_sources = ["SemiWiki", "Design-Reuse", "Synopsys官网", "Cadence官网", "Siemens官网"]  # 只做公司相关筛选，不做分类筛选
         
         print(f"\n过滤规则:")
@@ -1498,6 +1715,9 @@ def main():
         
         # 创建爬虫实例用于获取内容
         xepic_crawler = XepicNewsCrawler()
+        semitronix_crawler = SemitronixNewsCrawler()
+        primarius_crawler = PrimariusNewsCrawler()
+        univista_crawler = UnivistiaNewsCrawler()
         seccw_crawler = SeccwNewsCrawler()
         dramx_crawler = DramxNewsCrawler()
         synopsys_crawler = SynopsysNewsCrawler()
@@ -1510,6 +1730,9 @@ def main():
         sina_crawler = SinaNewsCrawler()
         qq_crawler = QQNewsCrawler()
         sohu_crawler = SohuNewsCrawler()
+        bing_crawler = BingNewsCrawler()
+        iwencai_crawler = IWenCaiNewsCrawler()
+        laoyaoba_crawler = LaoyaobaNewsCrawler()
         
         # 收集所有需要获取内容的新闻
         all_news_items = []
@@ -1551,10 +1774,17 @@ def main():
                 if link:
                     with cache_lock:
                         cached_by_link = content_cache.get(link, '')
-                    if cached_by_link and len(cached_by_link) >= 200:
+                    cache_bypass_sources = {"合见工软官网", "广立微官网", "概伦电子官网"}
+                    if source_name not in cache_bypass_sources and cached_by_link and len(cached_by_link) >= 200:
                         return {**item, 'content': cached_by_link, 'content_len': len(cached_by_link)}
                 if source_name == "芯华章官网":
                     content = xepic_crawler.fetch_news_content(news['link'])
+                elif source_name == "广立微官网":
+                    content = semitronix_crawler.fetch_news_content(news['link'])
+                elif source_name == "概伦电子官网":
+                    content = primarius_crawler.fetch_news_content(news['link'])
+                elif source_name == "合见工软官网":
+                    content = univista_crawler.fetch_news_content(news['link'])
                 elif source_name == "深圳电子商会":
                     content = seccw_crawler.fetch_news_content(news['link'])
                 elif source_name == "全球半导体观察":
@@ -1579,6 +1809,12 @@ def main():
                     content = qq_crawler.fetch_news_content(news['link'])
                 elif source_name == "搜狐网":
                     content = sohu_crawler.fetch_news_content(news['link'])
+                elif source_name == "Bing新闻":
+                    content = bing_crawler.fetch_news_content(news['link'])
+                elif source_name == "问财网":
+                    content = iwencai_crawler.fetch_news_content(news['link'])
+                elif source_name == "集微网":
+                    content = laoyaoba_crawler.fetch_news_content(news['link'])
                 else:
                     content = fetch_news_content(news['link'])
                 content_len = len(content) if content else 0

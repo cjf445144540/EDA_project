@@ -62,7 +62,7 @@ class THSNewsCrawler:
         news_list = []
         
         try:
-            response = requests.get(self.base_url, headers=self.headers, timeout=10)
+            response = requests.get(self.base_url, headers=self.headers, timeout=15)
             response.encoding = 'gbk'  # 同花顺使用GBK编码
             
             if response.status_code != 200:
@@ -144,7 +144,7 @@ class THSNewsCrawler:
         news_list = []
         
         try:
-            response = requests.get(self.ajax_url, headers=self.headers, timeout=10)
+            response = requests.get(self.ajax_url, headers=self.headers, timeout=15)
             response.encoding = 'gbk'
             
             if response.status_code != 200:

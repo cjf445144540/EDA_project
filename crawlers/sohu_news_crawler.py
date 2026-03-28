@@ -10,11 +10,14 @@
 
 import os
 import logging
+from glob import glob
+from urllib.parse import quote
 # 在任何import前禁用webdriver_manager日志和代理
 os.environ['WDM_LOG'] = '0'
 os.environ['WDM_LOG_LEVEL'] = '0'
 os.environ['WDM_LOCAL'] = '1'
 os.environ['WDM_SSL_VERIFY'] = '0'
+os.environ['WDM_OFFLINE'] = '1'  # 完全禁用网络请求，使用本地缓存
 os.environ['NO_PROXY'] = '*'
 os.environ['no_proxy'] = '*'
 for _name in ['WDM', 'webdriver_manager', 'webdriver_manager.core', 'urllib3']:
@@ -50,13 +53,9 @@ try:
     from selenium.webdriver.chrome.options import Options
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
-    try:
-        from webdriver_manager.chrome import ChromeDriverManager
-        HAS_SELENIUM = True
-    except ImportError:
-        HAS_SELENIUM = True
+    HAS_SELENIUM = True
 except ImportError:
-    pass
+    HAS_SELENIUM = False
 
 
 class SohuNewsCrawler:
@@ -71,6 +70,38 @@ class SohuNewsCrawler:
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
         }
+
+    def _find_local_chromedriver(self):
+        roots = [
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.wdm', 'drivers', 'chromedriver'),
+            os.path.join(os.getcwd(), '.wdm', 'drivers', 'chromedriver'),
+            os.path.join(os.path.expanduser('~'), '.wdm', 'drivers', 'chromedriver'),
+        ]
+        candidates = []
+        for root in roots:
+            if not os.path.isdir(root):
+                continue
+            candidates.extend(glob(os.path.join(root, '**', 'chromedriver.exe'), recursive=True))
+            candidates.extend(glob(os.path.join(root, '**', 'chromedriver'), recursive=True))
+        candidates = [p for p in candidates if os.path.isfile(p)]
+        if not candidates:
+            return ''
+        candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+        return candidates[0]
+
+    def _build_query_candidates(self):
+        keyword = (self.keyword or '').strip()
+        candidates = [keyword]
+        if keyword.lower() == 'eda':
+            candidates.extend(['电子设计自动化', '芯片设计', '半导体 EDA'])
+        seen = set()
+        out = []
+        for q in candidates:
+            q2 = (q or '').strip()
+            if q2 and q2 not in seen:
+                seen.add(q2)
+                out.append(q2)
+        return out
     
     def _parse_relative_time(self, time_str):
         """解析相对时间（如"7小时前"、"3天前"）为日期字符串"""
@@ -166,87 +197,95 @@ class SohuNewsCrawler:
             )
             page = context.new_page()
             
-            for page_num in range(1, max_pages + 1):
-                url = f"{self.SEARCH_URL}?keyword={self.keyword}&page={page_num}"
+            query_candidates = self._build_query_candidates()
+            for query in query_candidates:
+                query_hit = False
+                for page_num in range(1, max_pages + 1):
+                    url = f"{self.SEARCH_URL}?keyword={quote(query)}&page={page_num}"
                 
-                try:
-                    page.goto(url, wait_until='networkidle', timeout=30000)
-                    page.wait_for_selector('.plain-content', timeout=10000)
+                    try:
+                        page.goto(url, wait_until='networkidle', timeout=30000)
+                        page.wait_for_selector('#news-list', timeout=10000)
+                        # 等待内容加载完成
+                        page.wait_for_timeout(2000)
                     
-                    content = page.content()
-                    soup = BeautifulSoup(content, 'html.parser')
+                        content = page.content()
+                        soup = BeautifulSoup(content, 'html.parser')
+                        page_count = 0
+                        
+                        # 解析两种类型的新闻卡片
+                        news_items = []
+                        # 大卡片（带图片）: .cards-content
+                        for item in soup.select('.cards-content'):
+                            title_elem = item.select_one('.cards-content-title a')
+                            date_elem = item.select_one('.cards-content-right-comm')
+                            if title_elem:
+                                news_items.append((title_elem, date_elem))
+                        # 小卡片（纯文本）: .plain-content
+                        for item in soup.select('.plain-content'):
+                            title_elem = item.select_one('h4.plain-title a')
+                            date_elem = item.select_one('.plain-content-comm')
+                            if title_elem:
+                                news_items.append((title_elem, date_elem))
                     
-                    items = soup.select('.plain-content')
-                    page_count = 0
-                    stop_crawl = False
-                    
-                    for item in items:
-                        title_elem = item.select_one('h4 a')
-                        if not title_elem:
-                            continue
-                        
-                        title = title_elem.get_text(strip=True)
-                        link = title_elem.get('href', '')
-                        
-                        if not title or not link:
-                            continue
-                        
-                        # 确保链接完整
-                        if link.startswith('//'):
-                            link = 'https:' + link
-                        elif not link.startswith('http'):
-                            link = 'https://www.sohu.com' + link
-                        
-                        # 标题关键词过滤
-                        if any(kw in title for kw in skip_keywords):
-                            continue
-                        
-                        # 日期 - 从p:last-child的文本内容中提取
-                        date = ''
-                        date_elem = item.select_one('p:last-child')
-                        if date_elem:
-                            # 获取文本内容，日期格式可能是多种
-                            date_text = date_elem.get_text(strip=True)
-                            # 匹配多种日期格式
-                            import re
-                            # 相对时间
-                            time_match = re.search(r'(\d+[分小时天周月]+前|刚刚|今天|昨天)', date_text)
-                            if time_match:
-                                date = self._parse_relative_time(time_match.group(1))
-                            else:
-                                # 绝对日期 YYYY-MM-DD 或 YYYY-M-D
-                                date_match = re.search(r'(\d{4})-(\d{1,2})-(\d{1,2})', date_text)
-                                if date_match:
-                                    y, m, d = date_match.groups()
-                                    date = f"{y}-{m.zfill(2)}-{d.zfill(2)}"
+                        for title_elem, date_elem in news_items:
+                            title = title_elem.get_text(strip=True)
+                            link = title_elem.get('href', '')
+                            
+                            if not title or not link:
+                                continue
+                            
+                            if link.startswith('//'):
+                                link = 'https:' + link
+                            elif not link.startswith('http'):
+                                link = 'https://www.sohu.com' + link
+                            
+                            if any(kw in title for kw in skip_keywords):
+                                continue
+                            
+                            date = ''
+                            if date_elem:
+                                date_text = date_elem.get_text(strip=True)
+                                time_match = re.search(r'(\d+[分小时天周月钟]+前|刚刚|今天|昨天)', date_text)
+                                if time_match:
+                                    date = self._parse_relative_time(time_match.group(1))
                                 else:
-                                    # 中文日期 M月D日
-                                    cn_match = re.search(r'(\d{1,2})月(\d{1,2})日', date_text)
-                                    if cn_match:
-                                        m, d = cn_match.groups()
-                                        date = f"{datetime.now().year}-{m.zfill(2)}-{d.zfill(2)}"
-                        
-                        if date and date < cutoff_date:
-                            stop_crawl = True
-                            continue
-                        
-                        all_news.append({
-                            'title': title,
-                            'link': link,
-                            'date': date,
-                            'source': '搜狐网',
-                        })
-                        page_count += 1
+                                    date_match = re.search(r'(\d{4})-(\d{1,2})-(\d{1,2})', date_text)
+                                    if date_match:
+                                        y, m, d = date_match.groups()
+                                        date = f"{y}-{m.zfill(2)}-{d.zfill(2)}"
+                                    else:
+                                        cn_match = re.search(r'(\d{1,2})月(\d{1,2})日', date_text)
+                                        if cn_match:
+                                            m, d = cn_match.groups()
+                                            date = f"{datetime.now().year}-{m.zfill(2)}-{d.zfill(2)}"
+                            
+                            # 跳过超期新闻，但不停止爬取（搜狐搜索结果不按时间排序）
+                            if date and date < cutoff_date:
+                                continue
+                            
+                            all_news.append({
+                                'title': title,
+                                'link': link,
+                                'date': date,
+                                'source': '搜狐网',
+                            })
+                            page_count += 1
                     
-                    print(f"  第 {page_num} 页: {page_count} 条新闻")
+                        print(f"  第 {page_num} 页: {page_count} 条新闻")
+                        if page_count > 0:
+                            query_hit = True
                     
-                    if stop_crawl or page_count == 0:
+                        # 当整页没有新闻时停止（可能没有更多内容）
+                        if not news_items:
+                            break
+                    
+                        time.sleep(1)
+                    
+                    except Exception as e:
+                        print(f"  第 {page_num} 页出错: {e}")
                         break
-                    
-                    time.sleep(1)
-                    
-                except Exception as e:
-                    print(f"  第 {page_num} 页出错: {e}")
+                if query_hit:
                     break
             
             browser.close()
@@ -294,13 +333,21 @@ class SohuNewsCrawler:
             driver = None
             startup_error = None
             try:
-                try:
-                    driver = webdriver.Chrome(options=chrome_options)
-                except Exception:
-                    # 系统Chrome失败，尝试webdriver_manager
-                    from webdriver_manager.chrome import ChromeDriverManager
-                    service = Service(ChromeDriverManager().install())
-                    driver = webdriver.Chrome(service=service, options=chrome_options)
+                # 优先使用本地缓存的 chromedriver
+                local_driver = self._find_local_chromedriver()
+                if local_driver:
+                    try:
+                        service = Service(local_driver)
+                        driver = webdriver.Chrome(service=service, options=chrome_options)
+                    except Exception:
+                        driver = None
+                
+                # 尝试不指定 service 直接创建
+                if driver is None:
+                    try:
+                        driver = webdriver.Chrome(options=chrome_options)
+                    except Exception:
+                        driver = None
             except Exception as e:
                 startup_error = e
             finally:
@@ -320,82 +367,96 @@ class SohuNewsCrawler:
             # 设置页面加载超时
             driver.set_page_load_timeout(30)
             
-            for page_num in range(1, max_pages + 1):
-                url = f"{self.SEARCH_URL}?keyword={self.keyword}&page={page_num}"
+            query_candidates = self._build_query_candidates()
+            for query in query_candidates:
+                query_hit = False
+                for page_num in range(1, max_pages + 1):
+                    url = f"{self.SEARCH_URL}?keyword={quote(query)}&page={page_num}"
                 
-                try:
-                    driver.get(url)
-                    WebDriverWait(driver, 10).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, '.plain-content'))
-                    )
+                    try:
+                        driver.get(url)
+                        WebDriverWait(driver, 10).until(
+                            EC.presence_of_element_located((By.CSS_SELECTOR, '#news-list'))
+                        )
+                        # 等待内容加载完成
+                        time.sleep(2)
                     
-                    soup = BeautifulSoup(driver.page_source, 'html.parser')
-                    items = soup.select('.plain-content')
-                    page_count = 0
-                    stop_crawl = False
+                        soup = BeautifulSoup(driver.page_source, 'html.parser')
+                        page_count = 0
+                        
+                        # 解析两种类型的新闻卡片
+                        news_items = []
+                        # 大卡片（带图片）: .cards-content
+                        for item in soup.select('.cards-content'):
+                            title_elem = item.select_one('.cards-content-title a')
+                            date_elem = item.select_one('.cards-content-right-comm')
+                            if title_elem:
+                                news_items.append((title_elem, date_elem))
+                        # 小卡片（纯文本）: .plain-content
+                        for item in soup.select('.plain-content'):
+                            title_elem = item.select_one('h4.plain-title a')
+                            date_elem = item.select_one('.plain-content-comm')
+                            if title_elem:
+                                news_items.append((title_elem, date_elem))
                     
-                    for item in items:
-                        title_elem = item.select_one('h4 a')
-                        if not title_elem:
-                            continue
-                        
-                        title = title_elem.get_text(strip=True)
-                        link = title_elem.get('href', '')
-                        
-                        if not title or not link:
-                            continue
-                        
-                        if link.startswith('//'):
-                            link = 'https:' + link
-                        elif not link.startswith('http'):
-                            link = 'https://www.sohu.com' + link
-                        
-                        if any(kw in title for kw in skip_keywords):
-                            continue
-                        
-                        # 日期 - 从p:last-child的文本内容中提取
-                        date = ''
-                        date_elem = item.select_one('p:last-child')
-                        if date_elem:
-                            date_text = date_elem.get_text(strip=True)
-                            # 相对时间
-                            time_match = re.search(r'(\d+[分小时天周月]+前|刚刚|今天|昨天)', date_text)
-                            if time_match:
-                                date = self._parse_relative_time(time_match.group(1))
-                            else:
-                                # 绝对日期 YYYY-MM-DD 或 YYYY-M-D
-                                date_match = re.search(r'(\d{4})-(\d{1,2})-(\d{1,2})', date_text)
-                                if date_match:
-                                    y, m, d = date_match.groups()
-                                    date = f"{y}-{m.zfill(2)}-{d.zfill(2)}"
+                        for title_elem, date_elem in news_items:
+                            title = title_elem.get_text(strip=True)
+                            link = title_elem.get('href', '')
+                            
+                            if not title or not link:
+                                continue
+                            
+                            if link.startswith('//'):
+                                link = 'https:' + link
+                            elif not link.startswith('http'):
+                                link = 'https://www.sohu.com' + link
+                            
+                            if any(kw in title for kw in skip_keywords):
+                                continue
+                            
+                            date = ''
+                            if date_elem:
+                                date_text = date_elem.get_text(strip=True)
+                                time_match = re.search(r'(\d+[分小时天周月钟]+前|刚刚|今天|昨天)', date_text)
+                                if time_match:
+                                    date = self._parse_relative_time(time_match.group(1))
                                 else:
-                                    # 中文日期 M月D日
-                                    cn_match = re.search(r'(\d{1,2})月(\d{1,2})日', date_text)
-                                    if cn_match:
-                                        m, d = cn_match.groups()
-                                        date = f"{datetime.now().year}-{m.zfill(2)}-{d.zfill(2)}"
-                        
-                        if date and date < cutoff_date:
-                            stop_crawl = True
-                            continue
-                        
-                        all_news.append({
-                            'title': title,
-                            'link': link,
-                            'date': date,
-                            'source': '搜狐网',
-                        })
-                        page_count += 1
+                                    date_match = re.search(r'(\d{4})-(\d{1,2})-(\d{1,2})', date_text)
+                                    if date_match:
+                                        y, m, d = date_match.groups()
+                                        date = f"{y}-{m.zfill(2)}-{d.zfill(2)}"
+                                    else:
+                                        cn_match = re.search(r'(\d{1,2})月(\d{1,2})日', date_text)
+                                        if cn_match:
+                                            m, d = cn_match.groups()
+                                            date = f"{datetime.now().year}-{m.zfill(2)}-{d.zfill(2)}"
+                            
+                            # 跳过超期新闻，但不停止爬取（搜狐搜索结果不按时间排序）
+                            if date and date < cutoff_date:
+                                continue
+                            
+                            all_news.append({
+                                'title': title,
+                                'link': link,
+                                'date': date,
+                                'source': '搜狐网',
+                            })
+                            page_count += 1
                     
-                    print(f"  第 {page_num} 页: {page_count} 条新闻")
+                        print(f"  第 {page_num} 页: {page_count} 条新闻")
+                        if page_count > 0:
+                            query_hit = True
                     
-                    if stop_crawl or page_count == 0:
+                        # 当整页没有新闻时停止（可能没有更多内容）
+                        if not news_items:
+                            break
+                    
+                        time.sleep(1)
+                    
+                    except Exception as e:
+                        print(f"  第 {page_num} 页出错: {e}")
                         break
-                    
-                    time.sleep(1)
-                    
-                except Exception as e:
-                    print(f"  第 {page_num} 页出错: {e}")
+                if query_hit:
                     break
             
         except Exception as e:
@@ -411,12 +472,13 @@ class SohuNewsCrawler:
     
     def _filter_and_dedupe(self, all_news, min_content_length):
         """去重并过滤内容"""
-        # 去重
+        # 去重（用标题+日期组合，因为搜狐链接带不同的spm参数）
         unique_news = []
         seen = set()
         for news in all_news:
-            if news['link'] not in seen:
-                seen.add(news['link'])
+            key = f"{news['title']}_{news.get('date', '')}"
+            if key not in seen:
+                seen.add(key)
                 unique_news.append(news)
         
         # 获取内容并过滤

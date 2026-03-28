@@ -10,11 +10,13 @@
 
 import os
 import logging
+from glob import glob
 # 在任何import前禁用webdriver_manager日志和代理
 os.environ['WDM_LOG'] = '0'
 os.environ['WDM_LOG_LEVEL'] = '0'
 os.environ['WDM_LOCAL'] = '1'
 os.environ['WDM_SSL_VERIFY'] = '0'
+os.environ['WDM_OFFLINE'] = '1'  # 完全禁用网络请求，使用本地缓存
 os.environ['NO_PROXY'] = '*'
 os.environ['no_proxy'] = '*'
 for _name in ['WDM', 'webdriver_manager', 'webdriver_manager.core', 'urllib3']:
@@ -50,14 +52,9 @@ try:
     from selenium.webdriver.chrome.options import Options
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
-    try:
-        from webdriver_manager.chrome import ChromeDriverManager
-        HAS_SELENIUM = True
-    except ImportError:
-        # 尝试不使用webdriver_manager
-        HAS_SELENIUM = True
+    HAS_SELENIUM = True
 except ImportError:
-    pass
+    HAS_SELENIUM = False
 
 
 class QQNewsCrawler:
@@ -72,6 +69,24 @@ class QQNewsCrawler:
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
         }
+
+    def _find_local_chromedriver(self):
+        roots = [
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.wdm', 'drivers', 'chromedriver'),
+            os.path.join(os.getcwd(), '.wdm', 'drivers', 'chromedriver'),
+            os.path.join(os.path.expanduser('~'), '.wdm', 'drivers', 'chromedriver'),
+        ]
+        candidates = []
+        for root in roots:
+            if not os.path.isdir(root):
+                continue
+            candidates.extend(glob(os.path.join(root, '**', 'chromedriver.exe'), recursive=True))
+            candidates.extend(glob(os.path.join(root, '**', 'chromedriver'), recursive=True))
+        candidates = [p for p in candidates if os.path.isfile(p)]
+        if not candidates:
+            return ''
+        candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+        return candidates[0]
     
     def _parse_relative_time(self, time_str):
         """解析相对时间（如"7小时前"、"3天前"）为日期字符串"""
@@ -137,16 +152,7 @@ class QQNewsCrawler:
         keyword_lower = (self.keyword or '').strip().lower()
         if not keyword_lower:
             return True
-        if keyword_lower in text_lower:
-            return True
-        if keyword_lower == 'eda':
-            if '电子设计自动化' in text or '芯片设计' in text or 'ic设计' in text_lower:
-                return True
-        parts = [p for p in re.split(r'[\s,，/|]+', keyword_lower) if p]
-        for p in parts:
-            if p in text_lower:
-                return True
-        return False
+        return keyword_lower in text_lower
 
     def _extract_news_from_html_fallback(self, html, cutoff_date, skip_keywords):
         """当页面结构变化导致主选择器失效时，回退到全页链接提取"""
@@ -344,28 +350,13 @@ class QQNewsCrawler:
                 try:
                     page.wait_for_selector('div.card-margin.img-text-card', timeout=10000)
                 except:
-                    pass
+                    print(f"  第 {page_num} 页没有找到新闻")
+                    break
                 
                 # 获取新闻列表
                 news_items = page.query_selector_all('div.card-margin.img-text-card:not(.wiki-card)')
                 
                 if not news_items:
-                    fallback_news = self._extract_news_from_html_fallback(page.content(), cutoff_date, skip_keywords)
-                    if fallback_news:
-                        all_news.extend(fallback_news)
-                        print(f"  第 {page_num} 页: {len(fallback_news)} 条新闻（fallback）")
-                        continue
-                    fallback_news_script = self._extract_news_from_script_fallback(page.content(), cutoff_date, skip_keywords)
-                    if fallback_news_script:
-                        all_news.extend(fallback_news_script)
-                        print(f"  第 {page_num} 页: {len(fallback_news_script)} 条新闻（script-fallback）")
-                        continue
-                    if page_num == 1:
-                        fallback_news_search = self._extract_news_from_search_engine_fallback(cutoff_date, skip_keywords)
-                        if fallback_news_search:
-                            all_news.extend(fallback_news_search)
-                            print(f"  第 {page_num} 页: {len(fallback_news_search)} 条新闻（search-fallback）")
-                            break
                     print(f"  第 {page_num} 页没有新闻")
                     break
                 
@@ -387,6 +378,8 @@ class QQNewsCrawler:
                         time_str = time_elem.text_content().strip() if time_elem else ''
                         
                         if not title or not link:
+                            continue
+                        if not self._is_keyword_relevant(title):
                             continue
                         
                         # 解析日期（先从URL提取，失败再用时间元素）
@@ -487,13 +480,21 @@ class QQNewsCrawler:
             driver = None
             startup_error = None
             try:
-                try:
-                    driver = webdriver.Chrome(options=chrome_options)
-                except Exception:
-                    # 系统Chrome失败，尝试webdriver_manager
-                    from webdriver_manager.chrome import ChromeDriverManager
-                    service = Service(ChromeDriverManager().install())
-                    driver = webdriver.Chrome(service=service, options=chrome_options)
+                # 优先使用本地缓存的 chromedriver
+                local_driver = self._find_local_chromedriver()
+                if local_driver:
+                    try:
+                        service = Service(local_driver)
+                        driver = webdriver.Chrome(service=service, options=chrome_options)
+                    except Exception:
+                        driver = None
+                
+                # 尝试不指定 service 直接创建
+                if driver is None:
+                    try:
+                        driver = webdriver.Chrome(options=chrome_options)
+                    except Exception:
+                        driver = None
             except Exception as e:
                 startup_error = e
             finally:
@@ -527,28 +528,13 @@ class QQNewsCrawler:
                         EC.presence_of_element_located((By.CSS_SELECTOR, 'div.card-margin.img-text-card'))
                     )
                 except:
-                    pass
+                    print(f"  第 {page_num} 页没有找到新闻")
+                    break
                 
                 # 获取新闻列表
                 news_items = driver.find_elements(By.CSS_SELECTOR, 'div.card-margin.img-text-card:not(.wiki-card)')
                 
                 if not news_items:
-                    fallback_news = self._extract_news_from_html_fallback(driver.page_source, cutoff_date, skip_keywords)
-                    if fallback_news:
-                        all_news.extend(fallback_news)
-                        print(f"  第 {page_num} 页: {len(fallback_news)} 条新闻（fallback）")
-                        continue
-                    fallback_news_script = self._extract_news_from_script_fallback(driver.page_source, cutoff_date, skip_keywords)
-                    if fallback_news_script:
-                        all_news.extend(fallback_news_script)
-                        print(f"  第 {page_num} 页: {len(fallback_news_script)} 条新闻（script-fallback）")
-                        continue
-                    if page_num == 1:
-                        fallback_news_search = self._extract_news_from_search_engine_fallback(cutoff_date, skip_keywords)
-                        if fallback_news_search:
-                            all_news.extend(fallback_news_search)
-                            print(f"  第 {page_num} 页: {len(fallback_news_search)} 条新闻（search-fallback）")
-                            break
                     print(f"  第 {page_num} 页没有新闻")
                     break
                 
@@ -570,6 +556,8 @@ class QQNewsCrawler:
                         link = link_elem.get_attribute('href')
                         
                         if not title or not link:
+                            continue
+                        if not self._is_keyword_relevant(title):
                             continue
                         
                         # 解析日期（先从URL提取，失败再用时间元素）

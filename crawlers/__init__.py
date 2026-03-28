@@ -12,6 +12,9 @@ from .eetimes_news_crawler import EETimesNewsCrawler
 from .sohu_news_crawler import SohuNewsCrawler
 from .sina_news_crawler import SinaNewsCrawler
 from .qq_news_crawler import QQNewsCrawler
+from .bing_news_crawler import BingNewsCrawler
+from .iwencai_news_crawler import IWenCaiNewsCrawler
+from .laoyaoba_news_crawler import LaoyaobaNewsCrawler
 from .eechina_news_crawler import EEChinaNewsCrawler
 from .eetchina_news_crawler import EETChinaNewsCrawler
 from .eeworld_news_crawler import EEWorldNewsCrawler
@@ -39,6 +42,9 @@ __all__ = [
     'SohuNewsCrawler',
     'SinaNewsCrawler',
     'QQNewsCrawler',
+    'BingNewsCrawler',
+    'IWenCaiNewsCrawler',
+    'LaoyaobaNewsCrawler',
     'EEChinaNewsCrawler',
     'EETChinaNewsCrawler',
     'EEWorldNewsCrawler',

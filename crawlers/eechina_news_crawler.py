@@ -2,11 +2,27 @@
 """
 eechina新闻爬虫
 爬取电子工程网上的EDA相关新闻
-使用Selenium绑过WAF反爬验证
+使用Selenium绕过WAF反爬验证
 """
 
 import os
 import sys
+import logging
+from glob import glob
+
+# 禁用 webdriver_manager 网络请求
+os.environ['WDM_LOG'] = '0'
+os.environ['WDM_LOG_LEVEL'] = '0'
+os.environ['WDM_LOCAL'] = '1'
+os.environ['WDM_SSL_VERIFY'] = '0'
+os.environ['WDM_OFFLINE'] = '1'
+os.environ['NO_PROXY'] = '*'
+os.environ['no_proxy'] = '*'
+for _name in ['WDM', 'webdriver_manager', 'webdriver_manager.core', 'urllib3']:
+    logging.getLogger(_name).setLevel(logging.CRITICAL)
+    logging.getLogger(_name).propagate = False
+    logging.getLogger(_name).disabled = True
+
 import requests
 from bs4 import BeautifulSoup
 import re
@@ -49,6 +65,24 @@ class EEChinaNewsCrawler:
         }
         self.session = requests.Session()
         self.session.headers.update(self.headers)
+
+    def _find_local_chromedriver(self):
+        roots = [
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.wdm', 'drivers', 'chromedriver'),
+            os.path.join(os.getcwd(), '.wdm', 'drivers', 'chromedriver'),
+            os.path.join(os.path.expanduser('~'), '.wdm', 'drivers', 'chromedriver'),
+        ]
+        candidates = []
+        for root in roots:
+            if not os.path.isdir(root):
+                continue
+            candidates.extend(glob(os.path.join(root, '**', 'chromedriver.exe'), recursive=True))
+            candidates.extend(glob(os.path.join(root, '**', 'chromedriver'), recursive=True))
+        candidates = [p for p in candidates if os.path.isfile(p)]
+        if not candidates:
+            return ''
+        candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+        return candidates[0]
 
     def _build_search_url(self, page):
         if page == 1:
@@ -132,12 +166,21 @@ class EEChinaNewsCrawler:
             sys.stdout = sys.stderr = open(os.devnull, 'w')
         
         try:
-            try:
-                driver = webdriver.Chrome(options=chrome_options)
-            except Exception:
-                from webdriver_manager.chrome import ChromeDriverManager
-                service = Service(ChromeDriverManager().install())
-                driver = webdriver.Chrome(service=service, options=chrome_options)
+            # 优先使用本地缓存的 chromedriver
+            local_driver = self._find_local_chromedriver()
+            if local_driver:
+                try:
+                    service = Service(local_driver)
+                    driver = webdriver.Chrome(service=service, options=chrome_options)
+                except Exception:
+                    driver = None
+            
+            # 尝试不指定 service 直接创建
+            if driver is None:
+                try:
+                    driver = webdriver.Chrome(options=chrome_options)
+                except Exception:
+                    driver = None
         except Exception as e:
             if suppress_warning:
                 os.dup2(_orig_stdout_fd, 1)
