@@ -12,15 +12,22 @@ from .eetimes_news_crawler import EETimesNewsCrawler
 from .sohu_news_crawler import SohuNewsCrawler
 from .sina_news_crawler import SinaNewsCrawler
 from .qq_news_crawler import QQNewsCrawler
-from .bing_news_crawler import BingNewsCrawler
-from .iwencai_news_crawler import IWenCaiNewsCrawler
 from .laoyaoba_news_crawler import LaoyaobaNewsCrawler
 from .designnews_news_crawler import DesignNewsCrawler
 from .digitimes_news_crawler import DigitimesNewsCrawler
 from .eastmoney_news_crawler import EastmoneyNewsCrawler
-from .eechina_news_crawler import EEChinaNewsCrawler
-from .eetchina_news_crawler import EETChinaNewsCrawler
-from .eeworld_news_crawler import EEWorldNewsCrawler
+
+# disabled/others 爬虫（从 others 子目录导入）
+from .others import (
+    BingNewsCrawler,
+    IWenCaiNewsCrawler,
+    EEChinaNewsCrawler,
+    EETChinaNewsCrawler,
+    EEWorldNewsCrawler,
+    SynopsysNewsCrawler,
+    CadenceNewsCrawler,
+    SiemensNewsCrawler,
+)
 
 # 公司官网爬虫（从 official 子目录导入）
 from .official import (
@@ -31,9 +38,6 @@ from .official import (
     S2CNewsCrawler,
     GigaDANewsCrawler,
     XpedicNewsCrawler,
-    SynopsysNewsCrawler,
-    CadenceNewsCrawler,
-    SiemensNewsCrawler,
 )
 
 __all__ = [

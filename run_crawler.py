@@ -2,8 +2,6 @@
 """
 统一新闻爬取入口脚本
 支持调用多个爬虫脚本：
-- 同花顺个股新闻 (stock_news_crawler)
-- 广立微官网新闻 (semitronix_news_crawler)
 - 未来可继续添加其他爬虫...
 """
 
@@ -12,18 +10,19 @@
 # ========================================
 DEFAULT_DAYS = 7        # 默认爬取最近几天的新闻
 DEFAULT_MAX_PAGES = 1   # 默认最大爬取页数
-DEFAULT_MIN_CONTENT_LENGTH = 500  # 默认正文最小字数
+DEFAULT_MIN_CONTENT_LENGTH = 300  # 默认正文最小字数
+TITLE_SIMILARITY_THRESHOLD = 0.7
 
 # ========================================
 # 爬虫配置（在这里添加新的爬虫配置）
 # ========================================
-
 
 # 新浪网 新闻配置
 SINA_CONFIG = {
     'enabled': True,  # 是否启用
     'max_pages': DEFAULT_MAX_PAGES,
     'days': DEFAULT_DAYS,
+    'min_content_length': DEFAULT_MIN_CONTENT_LENGTH,
     'keyword': 'EDA',
 }
 
@@ -32,6 +31,7 @@ QQ_CONFIG = {
     'enabled': True,  # 是否启用
     'max_pages': DEFAULT_MAX_PAGES,
     'days': DEFAULT_DAYS,
+    'min_content_length': DEFAULT_MIN_CONTENT_LENGTH,
     'keyword': 'EDA',
 }
 
@@ -40,25 +40,8 @@ SOHU_CONFIG = {
     'enabled': True,  # 是否启用
     'max_pages': 3,  # 搜狐搜索结果不按时间排序，需多爬几页
     'days': DEFAULT_DAYS,
-    'keyword': 'EDA',
-}
-
-# Bing 新闻配置
-BING_CONFIG = {
-    'enabled': True,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
     'min_content_length': DEFAULT_MIN_CONTENT_LENGTH,
-    'keyword': 'EDA',  # 使用 EDA 关键词获取更多新闻
-}
-
-# 问财网 新闻配置（已禁用：网站反爬虫限制，需要登录）
-IWENCAI_CONFIG = {
-    'enabled': False,  # 禁用：问财网有严格的反爬虫限制
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-    'min_content_length': 100,
-    'keywords': ['EDA', 'synopsys', '新思科技', 'cadence'],
+    'keyword': 'EDA',
 }
 
 # 集微网 新闻配置
@@ -66,8 +49,26 @@ LAOYAOBA_CONFIG = {
     'enabled': True,  # 是否启用
     'max_pages': DEFAULT_MAX_PAGES,
     'days': DEFAULT_DAYS,
-    'min_content_length': 100,
-    'keywords': ['EDA', 'synopsys', '新思科技', 'cadence'],  # 支持多个关键词
+    'min_content_length': DEFAULT_MIN_CONTENT_LENGTH,
+    'keywords': ['EDA', 'synopsys', '新思科技'],  # 支持多个关键词
+}
+
+# 东方财富网 新闻配置
+EASTMONEY_CONFIG = {
+    'enabled': True,
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+    'min_content_length': DEFAULT_MIN_CONTENT_LENGTH,
+    'keywords': ['EDA', 'synopsys', '新思科技'],
+}
+
+# Bing 新闻配置
+BING_CONFIG = {
+    'enabled': False,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+    'min_content_length': DEFAULT_MIN_CONTENT_LENGTH,
+    'keyword': 'EDA',  # 使用 EDA 关键词获取更多新闻
 }
 
 # design news 新闻配置
@@ -88,13 +89,12 @@ DIGITIMES_CONFIG = {
     'keywords': ['EDA', 'synopsys'],
 }
 
-# 东方财富网 新闻配置
-EASTMONEY_CONFIG = {
-    'enabled': True,
+# EETimes 新闻配置
+EETIMES_CONFIG = {
+    'enabled': True,   # 是否启用
     'max_pages': DEFAULT_MAX_PAGES,
     'days': DEFAULT_DAYS,
-    'min_content_length': DEFAULT_MIN_CONTENT_LENGTH,
-    'keywords': ['EDA', 'synopsys', '新思科技'],
+    'keywords': ['synopsys', 'cadence', 'siemens', 'EDA'],
 }
 
 # 同花顺个股新闻配置
@@ -121,6 +121,15 @@ DRAMX_CONFIG = {
     'enabled': True,  # 是否启用
     'max_pages': DEFAULT_MAX_PAGES,
     'days': DEFAULT_DAYS,
+}
+
+# 问财网 新闻配置（已禁用：网站反爬虫限制，需要登录）
+IWENCAI_CONFIG = {
+    'enabled': False,  # 禁用：问财网有严格的反爬虫限制
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+    'min_content_length': DEFAULT_MIN_CONTENT_LENGTH,
+    'keywords': ['EDA', 'synopsys', '新思科技'],
 }
 
 # 广立微官网新闻配置
@@ -151,35 +160,6 @@ XEPIC_CONFIG = {
     'days': DEFAULT_DAYS,
 }
 
-# Synopsys 新闻配置
-SYNOPSYS_CONFIG = {
-    'enabled': False,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-}
-
-# Cadence 新闻配置
-CADENCE_CONFIG = {
-    'enabled': False,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-}
-
-# Siemens 新闻配置
-SIEMENS_CONFIG = {
-    'enabled': False,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-}
-
-# EETimes 新闻配置
-EETIMES_CONFIG = {
-    'enabled': True,   # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
-    'days': DEFAULT_DAYS,
-    'keywords': ['synopsys', 'cadence', 'siemens', 'EDA'],
-}
-
 # 思尔芯 新闻配置
 S2C_CONFIG = {
     'enabled': True,  # 是否启用
@@ -197,6 +177,27 @@ GIGADA_CONFIG = {
 # 芯和半导体 新闻配置
 XPEEDIC_CONFIG = {
     'enabled': True,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+}
+
+# Synopsys 新闻配置
+SYNOPSYS_CONFIG = {
+    'enabled': False,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+}
+
+# Cadence 新闻配置
+CADENCE_CONFIG = {
+    'enabled': False,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
+    'days': DEFAULT_DAYS,
+}
+
+# Siemens 新闻配置
+SIEMENS_CONFIG = {
+    'enabled': False,  # 是否启用
     'max_pages': DEFAULT_MAX_PAGES,
     'days': DEFAULT_DAYS,
 }
@@ -237,9 +238,11 @@ EEWORLD_CONFIG = {
 
 import os
 import sys
+import re
 import logging
 import contextlib
 from glob import glob
+from difflib import SequenceMatcher
 
 # 静默模式：减少日志输出，只显示关键信息
 QUIET_MODE = False  # 关闭静默模式，保留爬取日志
@@ -965,11 +968,12 @@ def run_sina_crawler(config):
 
     max_pages = config.get('max_pages', 3)
     days = config.get('days', 7)
+    min_content_length = config.get('min_content_length', DEFAULT_MIN_CONTENT_LENGTH)
     keyword = config.get('keyword', 'EDA')
 
     try:
         crawler = SinaNewsCrawler(keyword=keyword)
-        news_list = crawler.crawl(max_pages=max_pages, days=days)
+        news_list = crawler.crawl(max_pages=max_pages, days=days, min_content_length=min_content_length)
         crawler.save_to_json(news_list)
 
         result = {}
@@ -998,11 +1002,12 @@ def run_qq_crawler(config):
 
     max_pages = config.get('max_pages', 3)
     days = config.get('days', 7)
+    min_content_length = config.get('min_content_length', DEFAULT_MIN_CONTENT_LENGTH)
     keyword = config.get('keyword', 'EDA')
 
     try:
         crawler = QQNewsCrawler(keyword=keyword)
-        news_list = crawler.crawl(max_pages=max_pages, days=days)
+        news_list = crawler.crawl(max_pages=max_pages, days=days, min_content_length=min_content_length)
         crawler.save_to_json(news_list)
 
         result = {}
@@ -1031,11 +1036,12 @@ def run_sohu_crawler(config):
 
     max_pages = config.get('max_pages', 3)
     days = config.get('days', 7)
+    min_content_length = config.get('min_content_length', DEFAULT_MIN_CONTENT_LENGTH)
     keyword = config.get('keyword', 'EDA')
 
     try:
         crawler = SohuNewsCrawler(keyword=keyword)
-        news_list = crawler.crawl(max_pages=max_pages, days=days)
+        news_list = crawler.crawl(max_pages=max_pages, days=days, min_content_length=min_content_length)
         crawler.save_to_json(news_list)
 
         result = {}
@@ -1749,6 +1755,8 @@ def main():
     elapsed = time.time() - start_time
     log(f"\n爬取完成，耗时 {elapsed:.1f} 秒")
     
+    title_similarity_filtered_count = 0
+
     # ======== 保存汇总结果 ========
     if all_results:
         # 转换为新格式：公司名称 -> 来源 -> 新闻列表
@@ -1817,19 +1825,42 @@ def main():
                     key=lambda x: x.get('date', ''), reverse=True
                 )
         
-        # 去重：去掉标题重复的新闻（跨来源去重）
-        seen_titles = set()
+        # 去重：去掉标题重复或高相似的新闻（跨来源去重）
+        def normalize_title_for_dedupe(title_text):
+            text = (title_text or '').strip()
+            text = re.sub(r'(?<![A-Za-z])(?:[A-Za-z]\s+){1,}[A-Za-z](?!\s*[A-Za-z])', lambda m: m.group(0).replace(' ', ''), text)
+            text = ' '.join(text.split()).lower()
+            text = re.sub(r'[^\w\u4e00-\u9fff]+', '', text)
+            return text
+
+        seen_title_norms = []
+        similarity_threshold = float(TITLE_SIMILARITY_THRESHOLD)
+        if similarity_threshold > 1:
+            similarity_threshold = similarity_threshold / 100
+        similarity_threshold = max(0.0, min(1.0, similarity_threshold))
         total_before = sum(len(news_list) for sources in classified_results.values() for news_list in sources.values())
         for company_name in classified_results:
             for source_name in classified_results[company_name]:
                 unique_news = []
                 for news in classified_results[company_name][source_name]:
                     title = news.get('title', '').strip()
-                    if title and title not in seen_titles:
-                        seen_titles.add(title)
+                    norm_title = normalize_title_for_dedupe(title)
+                    if not norm_title:
+                        continue
+                    is_duplicate = False
+                    for seen_norm in seen_title_norms:
+                        if norm_title == seen_norm:
+                            is_duplicate = True
+                            break
+                        if SequenceMatcher(None, norm_title, seen_norm).ratio() >= similarity_threshold:
+                            is_duplicate = True
+                            break
+                    if not is_duplicate:
+                        seen_title_norms.append(norm_title)
                         unique_news.append(news)
                 classified_results[company_name][source_name] = unique_news
         total_after = sum(len(news_list) for sources in classified_results.values() for news_list in sources.values())
+        title_similarity_filtered_count = max(0, total_before - total_after)
         print(f"【Step 3】标题去重: {total_before} 条 → {total_after} 条（去掉 {total_before - total_after} 条重复）")
         print(f"\n最终结果: {total_after} 条新闻")
         print("="*50)
@@ -1878,16 +1909,23 @@ def main():
         digitimes_crawler = DigitimesNewsCrawler()
         eastmoney_crawler = EastmoneyNewsCrawler()
         
-        # 收集所有需要获取内容的新闻
         all_news_items = []
+        excluded_title_keywords = ["EDA集团控股"]
+        excluded_title_count = 0
         for company_name, sources in classified_results.items():
             for source_name, news_list in sources.items():
                 for news in news_list:
+                    title_text = (news.get('title', '') or '').strip()
+                    if any(k in title_text for k in excluded_title_keywords):
+                        excluded_title_count += 1
+                        continue
                     all_news_items.append({
                         'company': company_name,
                         'source': source_name,
                         'news': news
                     })
+        if excluded_title_count > 0:
+            print(f"  已过滤标题命中“EDA集团控股”的新闻: {excluded_title_count} 条")
         content_cache = {}
         cache_lock = threading.Lock()
         content_cache_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'json', 'content_cache.json')
@@ -2357,6 +2395,11 @@ def main():
                             best_company = company
             return best_company
 
+        def is_eda_title(title_text):
+            raw = (title_text or '')
+            normalized = re.sub(r'(?<![A-Za-z])(?:[A-Za-z]\s+){1,}[A-Za-z](?!\s*[A-Za-z])', lambda m: m.group(0).replace(' ', ''), raw)
+            return 'eda' in normalized.lower()
+
         industry_sources = news_by_company.get("行业新闻", {})
         if industry_sources:
             moved_items = {}
@@ -2393,6 +2436,36 @@ def main():
                 news_by_company.pop("行业新闻", None)
 
             print(f"  行业新闻标题归并完成: 归并 {moved_count} 条，未归并 {sum(len(v) for v in remained_sources.values()) if remained_sources else 0} 条")
+
+        industry_sources = news_by_company.get("行业新闻", {})
+        if industry_sources:
+            other_sources = {}
+            kept_industry_sources = {}
+            moved_to_other_count = 0
+            for source_name, news_items in industry_sources.items():
+                kept_items = []
+                for item in news_items:
+                    title = item.get('news', {}).get('title', '')
+                    if is_eda_title(title):
+                        kept_items.append(item)
+                    else:
+                        if source_name not in other_sources:
+                            other_sources[source_name] = []
+                        other_sources[source_name].append(item)
+                        moved_to_other_count += 1
+                if kept_items:
+                    kept_industry_sources[source_name] = kept_items
+
+            if kept_industry_sources:
+                news_by_company["行业新闻"] = kept_industry_sources
+            else:
+                news_by_company.pop("行业新闻", None)
+
+            if other_sources:
+                news_by_company["其他"] = other_sources
+
+            if moved_to_other_count > 0:
+                print(f"  行业新闻非EDA标题已移入“其他”: {moved_to_other_count} 条")
         
         # 清除检查进度提示
         print(" " * 60, end="\r")
@@ -2420,6 +2493,8 @@ def main():
             key=lambda x: get_company_latest_date(x[1]),
             reverse=True
         )
+        if any(name == "其他" for name, _ in sorted_companies):
+            sorted_companies = [x for x in sorted_companies if x[0] != "其他"] + [x for x in sorted_companies if x[0] == "其他"]
         
         # 树状结构显示
         print("\n" + _color("="*60, "94"))
@@ -2488,7 +2563,7 @@ def main():
                     global_index += 1
         
         print(_color("-" * 60, "90"))
-        print(_color(f"{_icon('📊', '[SUM]')} 共 {len(all_news)} 条新闻（已过滤掉字数<100的新闻）", "96"))
+        print(_color(f"{_icon('📊', '[SUM]')} 共 {len(all_news)} 条新闻（标题相似过滤 {title_similarity_filtered_count} 条）", "96"))
         
     if not sys.stdin or not sys.stdin.isatty():
         print("\n检测到非交互环境，跳过手动选择。")

@@ -11,7 +11,7 @@
 import os
 import logging
 from glob import glob
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit, urlunsplit
 # 在任何import前禁用webdriver_manager日志和代理
 os.environ['WDM_LOG'] = '0'
 os.environ['WDM_LOG_LEVEL'] = '0'
@@ -94,8 +94,6 @@ class SohuNewsCrawler:
     def _build_query_candidates(self):
         keyword = (self.keyword or '').strip()
         candidates = [keyword]
-        if keyword.lower() == 'eda':
-            candidates.extend(['电子设计自动化', '芯片设计', '半导体 EDA'])
         seen = set()
         out = []
         for q in candidates:
@@ -152,6 +150,37 @@ class SohuNewsCrawler:
             return ''
         
         return date.strftime('%Y-%m-%d')
+
+    def _collect_page_news_items(self, soup):
+        news_items = []
+        for item in soup.select('.cards-content'):
+            title_elem = item.select_one('.cards-content-title a')
+            date_elem = item.select_one('.cards-content-right-comm')
+            if title_elem:
+                news_items.append((title_elem, date_elem))
+        for item in soup.select('.plain-content'):
+            title_elem = item.select_one('h4.plain-title a')
+            date_elem = item.select_one('.plain-content-comm')
+            if title_elem:
+                news_items.append((title_elem, date_elem))
+        if news_items:
+            return news_items
+
+        fallback = []
+        for a in soup.select('#news-list a[href], .news-list a[href]'):
+            title = ' '.join((a.get_text(' ', strip=True) or '').split())
+            href = (a.get('href') or '').strip()
+            if not title or not href:
+                continue
+            fallback.append((a, None))
+        return fallback
+
+    def _normalize_link_for_dedupe(self, link):
+        try:
+            sp = urlsplit((link or '').strip())
+            return urlunsplit((sp.scheme, sp.netloc, sp.path, '', ''))
+        except Exception:
+            return (link or '').strip()
     
     def crawl(self, max_pages=1, days=7, min_content_length=500):
         """
@@ -201,7 +230,6 @@ class SohuNewsCrawler:
             
             query_candidates = self._build_query_candidates()
             for query in query_candidates:
-                query_hit = False
                 for page_num in range(1, max_pages + 1):
                     url = f"{self.SEARCH_URL}?keyword={quote(query)}&page={page_num}"
                 
@@ -215,20 +243,7 @@ class SohuNewsCrawler:
                         soup = BeautifulSoup(content, 'html.parser')
                         page_count = 0
                         
-                        # 解析两种类型的新闻卡片
-                        news_items = []
-                        # 大卡片（带图片）: .cards-content
-                        for item in soup.select('.cards-content'):
-                            title_elem = item.select_one('.cards-content-title a')
-                            date_elem = item.select_one('.cards-content-right-comm')
-                            if title_elem:
-                                news_items.append((title_elem, date_elem))
-                        # 小卡片（纯文本）: .plain-content
-                        for item in soup.select('.plain-content'):
-                            title_elem = item.select_one('h4.plain-title a')
-                            date_elem = item.select_one('.plain-content-comm')
-                            if title_elem:
-                                news_items.append((title_elem, date_elem))
+                        news_items = self._collect_page_news_items(soup)
                     
                         for title_elem, date_elem in news_items:
                             title = title_elem.get_text(strip=True)
@@ -275,8 +290,6 @@ class SohuNewsCrawler:
                             page_count += 1
                     
                         print(f"  第 {page_num} 页: {page_count} 条新闻")
-                        if page_count > 0:
-                            query_hit = True
                     
                         # 当整页没有新闻时停止（可能没有更多内容）
                         if not news_items:
@@ -287,8 +300,6 @@ class SohuNewsCrawler:
                     except Exception as e:
                         print(f"  第 {page_num} 页出错: {e}")
                         break
-                if query_hit:
-                    break
             
             browser.close()
         
@@ -371,7 +382,6 @@ class SohuNewsCrawler:
             
             query_candidates = self._build_query_candidates()
             for query in query_candidates:
-                query_hit = False
                 for page_num in range(1, max_pages + 1):
                     url = f"{self.SEARCH_URL}?keyword={quote(query)}&page={page_num}"
                 
@@ -386,20 +396,7 @@ class SohuNewsCrawler:
                         soup = BeautifulSoup(driver.page_source, 'html.parser')
                         page_count = 0
                         
-                        # 解析两种类型的新闻卡片
-                        news_items = []
-                        # 大卡片（带图片）: .cards-content
-                        for item in soup.select('.cards-content'):
-                            title_elem = item.select_one('.cards-content-title a')
-                            date_elem = item.select_one('.cards-content-right-comm')
-                            if title_elem:
-                                news_items.append((title_elem, date_elem))
-                        # 小卡片（纯文本）: .plain-content
-                        for item in soup.select('.plain-content'):
-                            title_elem = item.select_one('h4.plain-title a')
-                            date_elem = item.select_one('.plain-content-comm')
-                            if title_elem:
-                                news_items.append((title_elem, date_elem))
+                        news_items = self._collect_page_news_items(soup)
                     
                         for title_elem, date_elem in news_items:
                             title = title_elem.get_text(strip=True)
@@ -446,8 +443,6 @@ class SohuNewsCrawler:
                             page_count += 1
                     
                         print(f"  第 {page_num} 页: {page_count} 条新闻")
-                        if page_count > 0:
-                            query_hit = True
                     
                         # 当整页没有新闻时停止（可能没有更多内容）
                         if not news_items:
@@ -458,8 +453,6 @@ class SohuNewsCrawler:
                     except Exception as e:
                         print(f"  第 {page_num} 页出错: {e}")
                         break
-                if query_hit:
-                    break
             
         except Exception as e:
             print(f"  爬取出错: {e}")
@@ -474,11 +467,13 @@ class SohuNewsCrawler:
     
     def _filter_and_dedupe(self, all_news, min_content_length):
         """去重并过滤内容"""
-        # 去重（用标题+日期组合，因为搜狐链接带不同的spm参数）
+        # 去重（与新浪/腾讯一致：按链接去重）
         unique_news = []
         seen = set()
         for news in all_news:
-            key = f"{news['title']}_{news.get('date', '')}"
+            key = self._normalize_link_for_dedupe(news.get('link', ''))
+            if not key:
+                continue
             if key not in seen:
                 seen.add(key)
                 unique_news.append(news)

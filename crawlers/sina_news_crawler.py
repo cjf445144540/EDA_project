@@ -20,7 +20,9 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 class SinaNewsCrawler:
     """新浪新闻搜索爬虫"""
     
-    # 新浪搜索使用POST方式
+    # 新浪搜索新接口
+    SEARCH_API_URL = 'https://search.sina.com.cn/api/news'
+    # 旧版页面地址（保留）
     SEARCH_URL = 'https://search.sina.com.cn/news'
     
     def __init__(self, keyword="EDA"):
@@ -52,54 +54,36 @@ class SinaNewsCrawler:
         
         for page in range(1, max_pages + 1):
             try:
-                # 新浪搜索使用POST方式分页
-                form_data = {
-                    'q': self.keyword,
-                    'c': 'news',
-                    'adv': '0',
-                    'col': '',
-                    'source': '',
-                    'size': '20',
-                    'sort': 'time',  # 按时间排序
-                    'stime': '',
-                    'etime': '',
-                    'page': str(page),
-                }
-                
-                response = requests.post(
-                    self.SEARCH_URL,
-                    data=form_data,
+                response = requests.get(
+                    self.SEARCH_API_URL,
+                    params={
+                        'q': self.keyword,
+                        'page': page,
+                        'size': 20,
+                    },
                     headers=self.headers,
                     timeout=15,
                     verify=False,
                     proxies={'http': None, 'https': None}
                 )
-                response.encoding = 'utf-8'
-                
                 if response.status_code != 200:
                     print(f"  第 {page} 页请求失败，状态码: {response.status_code}")
                     break
-                
-                soup = BeautifulSoup(response.text, 'html.parser')
-                
-                # 查找新闻列表
-                news_items = soup.select('div.box-result')
-                
+
+                payload = response.json()
+                if payload.get('code') != 0:
+                    print(f"  第 {page} 页接口返回异常: {payload.get('message', 'unknown')}")
+                    break
+                news_items = payload.get('data', {}).get('list', []) or []
                 if not news_items:
                     print(f"  第 {page} 页没有找到新闻")
                     break
                 
                 page_count = 0
-                stop_crawl = False
                 
                 for item in news_items:
-                    # 获取标题和链接
-                    title_elem = item.select_one('h2 a')
-                    if not title_elem:
-                        continue
-                    
-                    title = title_elem.get_text(strip=True)
-                    link = title_elem.get('href', '')
+                    title = item.get('title', '') or ''
+                    link = item.get('url', '') or ''
                     
                     if not title or not link:
                         continue
@@ -109,17 +93,13 @@ class SinaNewsCrawler:
                     
                     # 获取日期
                     date = ''
-                    date_elem = item.select_one('span.fgray_time')
-                    if date_elem:
-                        date_text = date_elem.get_text(strip=True)
-                        # 格式: "源名称   2026-03-10 10:02:29"
-                        date_match = re.search(r'(\d{4}-\d{2}-\d{2})', date_text)
-                        if date_match:
-                            date = date_match.group(1)
+                    date_text = (item.get('dataTime') or item.get('time') or '').strip()
+                    date_match = re.search(r'(\d{4}-\d{2}-\d{2})', date_text)
+                    if date_match:
+                        date = date_match.group(1)
                     
                     # 日期过滤
                     if date and date < cutoff_date:
-                        stop_crawl = True
                         continue
                     
                     # 标题关键词过滤（过滤直播相关）
@@ -144,9 +124,6 @@ class SinaNewsCrawler:
                     page_count += 1
                 
                 print(f"  第 {page} 页: {page_count} 条新闻")
-                
-                if stop_crawl or page_count == 0:
-                    break
                 
                 # 礼貌等待
                 time.sleep(0.5)

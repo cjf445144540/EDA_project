@@ -363,7 +363,6 @@ class QQNewsCrawler:
                     break
                 
                 page_count = 0
-                stop_crawl = False
                 
                 for item in news_items:
                     try:
@@ -391,7 +390,6 @@ class QQNewsCrawler:
                         
                         # 日期过滤
                         if date and date < cutoff_date:
-                            stop_crawl = True
                             continue
                         
                         # 标题关键词过滤
@@ -410,9 +408,6 @@ class QQNewsCrawler:
                         continue
                 
                 print(f"  第 {page_num} 页: {page_count} 条新闻")
-                
-                if stop_crawl or page_count == 0:
-                    break
                 
                 time.sleep(1)
             
@@ -541,7 +536,6 @@ class QQNewsCrawler:
                     break
                 
                 page_count = 0
-                stop_crawl = False
                 
                 for item in news_items:
                     try:
@@ -568,7 +562,6 @@ class QQNewsCrawler:
                             date = self._parse_relative_time(time_str)
                         
                         if date and date < cutoff_date:
-                            stop_crawl = True
                             continue
                         
                         if any(kw in title for kw in skip_keywords):
@@ -586,9 +579,6 @@ class QQNewsCrawler:
                         continue
                 
                 print(f"  第 {page_num} 页: {page_count} 条新闻")
-                
-                if stop_crawl or page_count == 0:
-                    break
                 
                 time.sleep(1)
             

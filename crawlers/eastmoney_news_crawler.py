@@ -107,6 +107,13 @@ class EastmoneyNewsCrawler:
         except Exception:
             return (link or '').strip()
 
+    def _normalize_title(self, title):
+        text = ' '.join((title or '').split())
+        text = re.sub(r'(?<![A-Za-z])(?:[A-Za-z]\s+){1,}[A-Za-z](?!\s*[A-Za-z])', lambda m: m.group(0).replace(' ', ''), text)
+        text = re.sub(r'([\u4e00-\u9fff])\s+([A-Z]{2,})', r'\1\2', text)
+        text = re.sub(r'([A-Z]{2,})\s+([\u4e00-\u9fff])', r'\1\2', text)
+        return text.strip()
+
     def _extract_news_items(self, html):
         soup = BeautifulSoup(html or '', 'html.parser')
         items = []
@@ -114,7 +121,7 @@ class EastmoneyNewsCrawler:
             t_a = node.select_one('.news_item_t a[href]')
             if not t_a:
                 continue
-            title = ' '.join(t_a.get_text(' ', strip=True).split())
+            title = self._normalize_title(t_a.get_text(' ', strip=True))
             link = self._normalize_link(t_a.get('href', '').strip())
             if not title or not link:
                 continue
