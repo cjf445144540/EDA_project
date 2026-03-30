@@ -15,8 +15,11 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class DesignNewsCrawler:
+    _shared_content_hints = {}
+
     def __init__(self, keyword="EDA"):
         self.keyword = keyword
+        self.content_hints = self.__class__._shared_content_hints
         self.rss_headers = {
             'User-Agent': 'Mozilla/5.0',
             'Accept': 'application/rss+xml,application/xml,text/xml;q=0.9,*/*;q=0.8',
@@ -27,6 +30,21 @@ class DesignNewsCrawler:
             'Accept-Language': 'en-US,en;q=0.9',
             'Referer': 'https://www.designnews.com/',
         }
+        self.jina_headers = {
+            'User-Agent': 'Mozilla/5.0',
+            'Accept': 'text/plain,text/markdown;q=0.9,*/*;q=0.8',
+        }
+
+    def _normalize_link(self, link):
+        try:
+            sp = urlparse((link or '').strip())
+            return f"{sp.scheme}://{sp.netloc}{sp.path}" if sp.scheme and sp.netloc else (link or '').strip()
+        except Exception:
+            return (link or '').strip()
+
+    def _clean_summary(self, text):
+        raw = BeautifulSoup((text or '').strip(), 'html.parser').get_text(' ', strip=True)
+        return ' '.join(raw.split())
 
     def _build_keywords(self, keywords):
         if keywords:
@@ -178,12 +196,16 @@ class DesignNewsCrawler:
                         if key in seen:
                             continue
                         seen.add(key)
+                        summary = self._clean_summary(item.findtext('description') or '')
                         out.append({
                             'title': title,
                             'link': link,
                             'date': date,
                             'source': 'Design News',
+                            'summary': summary,
                         })
+                        if summary:
+                            self.content_hints[self._normalize_link(link)] = summary
                 else:
                     for n in self._extract_from_html_search(txt, cutoff_date):
                         key = f"{n.get('title', '')}|{n.get('link', '')}"
@@ -194,6 +216,153 @@ class DesignNewsCrawler:
             except Exception:
                 continue
         return out
+
+    def _fetch_bing_summary_by_url(self, url):
+        try:
+            p = urlparse((url or '').strip())
+            slug = (p.path.split('/')[-1] if p.path else '').replace('-', ' ').strip()
+            if not slug:
+                return ''
+            query = f"site:designnews.com {slug}"
+            rss_url = f"https://www.bing.com/news/search?q={quote(query)}&format=rss&setmkt=en-US&setlang=en-US&qft=sortbydate%3d%221%22&form=YFNR"
+            resp = requests.get(
+                rss_url,
+                headers=self.rss_headers,
+                timeout=5,
+                verify=False,
+                allow_redirects=True
+            )
+            if resp.status_code != 200 or not (resp.text or '').strip():
+                return ''
+            rss_text = resp.text or ''
+            soup = BeautifulSoup(rss_text, 'xml')
+            items = soup.find_all('item')
+            best = ''
+            best_score = -1
+            for item in items[:8]:
+                link = self._decode_bing_link((item.find('link').get_text(strip=True) if item.find('link') else '').strip())
+                desc_raw = (item.find('description').get_text(strip=True) if item.find('description') else '').strip()
+                if not desc_raw:
+                    continue
+                desc = BeautifulSoup(desc_raw, 'html.parser').get_text(' ', strip=True)
+                desc = ' '.join((desc or '').split())
+                score = len(desc)
+                if link and 'designnews.com' in link.lower():
+                    score += 1000
+                    if p.path and p.path.lower() in link.lower():
+                        score += 1000
+                if score > best_score:
+                    best_score = score
+                    best = desc
+            if best:
+                return best
+            channel = (p.path.split('/')[1] if len(p.path.split('/')) > 1 else '').replace('-', ' ').strip()
+            if not channel:
+                return ''
+            query2 = f"site:designnews.com {channel}"
+            rss_url2 = f"https://www.bing.com/news/search?q={quote(query2)}&format=rss&setmkt=en-US&setlang=en-US&qft=sortbydate%3d%221%22&form=YFNR"
+            resp2 = requests.get(
+                rss_url2,
+                headers=self.rss_headers,
+                timeout=5,
+                verify=False,
+                allow_redirects=True
+            )
+            txt2 = resp2.text or ''
+            if not (('<rss' in txt2[:240].lower()) or ('<?xml' in txt2[:240].lower())):
+                return ''
+            root2 = ET.fromstring(txt2)
+            slug_tokens = {t for t in re.findall(r'[a-z0-9]+', slug.lower()) if len(t) > 2}
+            best2 = ''
+            best2_score = -1
+            for item in root2.findall('./channel/item')[:20]:
+                title_text = (item.findtext('title') or '').lower()
+                desc = self._clean_summary(item.findtext('description') or '')
+                if not desc:
+                    continue
+                title_tokens = {t for t in re.findall(r'[a-z0-9]+', title_text) if len(t) > 2}
+                overlap = len(slug_tokens & title_tokens)
+                score = overlap * 100 + len(desc)
+                if score > best2_score:
+                    best2_score = score
+                    best2 = desc
+            return best2
+        except Exception:
+            return ''
+
+    def _fetch_bing_summary_by_title(self, title, expect_link=''):
+        try:
+            query = f"site:designnews.com {title}"
+            rss_url = f"https://www.bing.com/news/search?q={quote(query)}&format=rss&setmkt=en-US&setlang=en-US&qft=sortbydate%3d%221%22&form=YFNR"
+            resp = requests.get(
+                rss_url,
+                headers=self.rss_headers,
+                timeout=8,
+                verify=False,
+                allow_redirects=True
+            )
+            if resp.status_code != 200 or not (resp.text or '').strip():
+                return ''
+            rss_text = resp.text or ''
+            soup = BeautifulSoup(rss_text, 'xml')
+            items = soup.find_all('item')
+            expected = self._normalize_link(expect_link)
+            best = ''
+            best_score = -1
+            for item in items[:8]:
+                desc = self._clean_summary(item.find('description').get_text(strip=True) if item.find('description') else '')
+                if not desc:
+                    continue
+                link = self._normalize_link(self._decode_bing_link((item.find('link').get_text(strip=True) if item.find('link') else '').strip()))
+                score = len(desc)
+                if link and 'designnews.com' in link.lower():
+                    score += 1000
+                if expected and link and expected == link:
+                    score += 2000
+                if score > best_score:
+                    best_score = score
+                    best = desc
+            return best
+        except Exception:
+            return ''
+
+    def _fetch_topic_summary(self, target_title):
+        target = (target_title or '').lower()
+        if not target:
+            return ''
+        token_set = {t for t in re.findall(r'[a-z0-9]+', target) if len(t) > 2}
+        if not token_set:
+            return ''
+        topics = ['EDA', 'synopsys', 'design software']
+        best = ''
+        best_score = -1
+        for topic in topics:
+            try:
+                query = f"site:designnews.com {topic}"
+                rss_url = f"https://www.bing.com/news/search?q={quote(query)}&format=rss&setmkt=en-US&setlang=en-US&qft=sortbydate%3d%221%22&form=YFNR"
+                resp = requests.get(rss_url, headers=self.rss_headers, timeout=8, verify=False, allow_redirects=True)
+                txt = (resp.text or '')
+                if not (('<rss' in txt[:240].lower()) or ('<?xml' in txt[:240].lower())):
+                    continue
+                root = ET.fromstring(txt)
+                for item in root.findall('./channel/item')[:20]:
+                    it_title = (item.findtext('title') or '').strip().lower()
+                    if not it_title:
+                        continue
+                    it_tokens = {t for t in re.findall(r'[a-z0-9]+', it_title) if len(t) > 2}
+                    overlap = len(token_set & it_tokens)
+                    if overlap <= 0:
+                        continue
+                    desc = self._clean_summary(item.findtext('description') or '')
+                    if not desc:
+                        continue
+                    score = overlap * 100 + len(desc)
+                    if score > best_score:
+                        best_score = score
+                        best = desc
+            except Exception:
+                continue
+        return best
 
     def crawl(self, max_pages=1, days=7, min_content_length=0, keywords=None):
         kw_list = self._build_keywords(keywords)
@@ -217,6 +386,9 @@ class DesignNewsCrawler:
                 if link in seen:
                     continue
                 seen.add(link)
+                hint = self._clean_summary(n.get('summary', ''))
+                if len(hint) >= 60:
+                    self.content_hints[self._normalize_link(link)] = hint
                 all_news.append(n)
                 page_count += 1
             print(f"  关键词 {kw}: {page_count} 条新闻")
@@ -239,6 +411,9 @@ class DesignNewsCrawler:
                     if link in seen:
                         continue
                     seen.add(link)
+                    hint = self._clean_summary(n.get('summary', ''))
+                    if len(hint) >= 60:
+                        self.content_hints[self._normalize_link(link)] = hint
                     all_news.append(n)
                     page_count += 1
                 print(f"  关键词 {kw}（全量）: {page_count} 条新闻")
@@ -258,13 +433,17 @@ class DesignNewsCrawler:
                 all_news.append(n)
 
         all_news.sort(key=lambda x: x.get('date', ''), reverse=True)
-        if min_content_length > 0 and all_news:
-            print(f"  正在获取新闻内容并过滤（>={min_content_length}字）...")
+        if all_news:
+            if min_content_length > 0:
+                print(f"  正在获取新闻内容并过滤（>={min_content_length}字）...")
+            else:
+                print("  正在获取新闻内容...")
             filtered = []
             for n in all_news:
                 content = self.fetch_news_content(n.get('link', ''))
-                if content and len(content) >= min_content_length:
+                if content:
                     n['content'] = content
+                if min_content_length <= 0 or (content and len(content) >= min_content_length):
                     filtered.append(n)
             all_news = filtered
         print(f"  共获取 {len(all_news)} 条新闻")
@@ -273,33 +452,100 @@ class DesignNewsCrawler:
     def fetch_news_content(self, url):
         if not url:
             return ''
-        try:
-            resp = requests.get(url, headers=self.headers, timeout=20, verify=False, allow_redirects=True)
-            if resp.status_code != 200:
+        normalized_url = self._normalize_link(url)
+        hint = self.content_hints.get(normalized_url, '')
+        if hint and len(hint) >= 100:
+            return hint
+
+        def extract_from_jina_markdown(md_text):
+            """从 Jina Reader 返回的 Markdown 中提取文章正文"""
+            if not md_text:
                 return ''
-            resp.encoding = resp.apparent_encoding or 'utf-8'
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            selectors = ['article', '.article-content', '.entry-content', '.post-content', '.content-body', '.field--name-body']
-            for sel in selectors:
-                node = soup.select_one(sel)
-                if not node:
+            lines = md_text.splitlines()
+            
+            # 收集有效的文章段落
+            out = []
+            for line in lines:
+                line = line.strip()
+                if not line:
                     continue
-                for t in node(['script', 'style', 'noscript', 'iframe', 'form', 'nav', 'aside']):
-                    t.decompose()
-                lines = []
-                for p in node.find_all('p'):
-                    txt = ' '.join((p.get_text(' ', strip=True) or '').split())
-                    if txt and len(txt) > 20:
-                        lines.append(txt)
-                if lines:
-                    return '\n'.join(lines[:200])
-                txt = node.get_text('\n', strip=True)
-                parts = [x.strip() for x in txt.splitlines() if x.strip() and len(x.strip()) > 20]
-                if parts:
-                    return '\n'.join(parts[:200])
+                # 跳过短行
+                if len(line) < 80:
+                    continue
+                # 跳过图片
+                if line.startswith('!['):
+                    continue
+                # 跳过纯链接行
+                if line.startswith('[') and (line.endswith(')') or '](' in line):
+                    continue
+                # 跳过包含 URL 的行
+                if 'http://' in line or 'https://' in line:
+                    continue
+                # 跳过列表项链接
+                if line.startswith('*   ['):
+                    continue
+                # 跳过导航/元数据行
+                if any(x in line.lower() for x in ['informa plc', 'cookie', 'privacy', 'terms of', 'copyright', 'registered office']):
+                    continue
+                # 跳过作者行
+                if line.startswith('by[') or line.startswith('By['):
+                    continue
+                # 处理列表项（可能是文章要点）
+                if line.startswith('*   '):
+                    line = line[4:].strip()
+                    if len(line) < 50:
+                        continue
+                # 添加有效段落
+                out.append(line)
+                if len(out) >= 30:
+                    break
+            
+            if out:
+                return '\n'.join(out)
             return ''
+
+        # 方法1: 从 Bing 摘要获取（更稳定）
+        try:
+            summary = self._fetch_bing_summary_by_url(url)
+            if summary and len(summary) >= 60:
+                self.content_hints[normalized_url] = summary
+                return summary
         except Exception:
-            return ''
+            pass
+
+        # 方法2: 按标题搜索 Bing
+        try:
+            p = urlparse(url)
+            slug = (p.path.split('/')[-1] if p.path else '').replace('-', ' ').strip()
+            if slug:
+                summary = self._fetch_bing_summary_by_title(slug, url)
+                if summary and len(summary) >= 60:
+                    self.content_hints[normalized_url] = summary
+                    return summary
+        except Exception:
+            pass
+
+        # 方法3: 使用 Jina Reader API（备选，可能超时）
+        try:
+            jina_url = f"https://r.jina.ai/{url}"
+            resp = requests.get(
+                jina_url,
+                headers=self.jina_headers,
+                timeout=20,
+                verify=False,
+                allow_redirects=True,
+                proxies={'http': None, 'https': None}
+            )
+            if resp.status_code == 200 and resp.text:
+                content = extract_from_jina_markdown(resp.text)
+                if content and len(content) >= 100:
+                    self.content_hints[normalized_url] = content
+                    return content
+        except Exception:
+            pass
+
+        hint = self.content_hints.get(normalized_url, '')
+        return hint if len(hint) >= 60 else ''
 
     def save_to_json(self, news_list, filename='designnews_news.json'):
         output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'json')

@@ -71,9 +71,9 @@ BING_CONFIG = {
     'keyword': 'EDA',  # 使用 EDA 关键词获取更多新闻
 }
 
-# design news 新闻配置
+# design news 新闻配置（已禁用：网站被Cloudflare阻止，无法获取内容）
 DESIGNNEWS_CONFIG = {
-    'enabled': True,
+    'enabled': False,
     'max_pages': DEFAULT_MAX_PAGES,
     'days': DEFAULT_DAYS,
     'min_content_length': 0,
@@ -82,7 +82,7 @@ DESIGNNEWS_CONFIG = {
 
 # digitimes 新闻配置
 DIGITIMES_CONFIG = {
-    'enabled': True,
+    'enabled': False,
     'max_pages': DEFAULT_MAX_PAGES,
     'days': DEFAULT_DAYS,
     'min_content_length': 0,
