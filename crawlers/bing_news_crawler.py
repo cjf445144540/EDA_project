@@ -64,7 +64,9 @@ class BingNewsCrawler:
             'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.7,zh;q=0.6',
             'Referer': 'https://www.bing.com/',
         }
-        self.request_timeout = 8
+        self.request_timeout = 6
+        self.supplement_timeout = 4
+        self.max_web_candidates = 3
 
     def _build_keywords(self, keywords):
         vals = []
@@ -352,11 +354,11 @@ class BingNewsCrawler:
 
     def _fetch_web_rss_news(self, cutoff_date):
         all_news = []
-        for url in self._build_web_rss_candidate_urls():
+        for url in self._build_web_rss_candidate_urls()[:self.max_web_candidates]:
             try:
                 resp = requests.get(
                     url,
-                    timeout=self.request_timeout,
+                    timeout=self.supplement_timeout,
                     verify=False,
                     allow_redirects=True,
                     proxies={'http': None, 'https': None}
@@ -364,7 +366,9 @@ class BingNewsCrawler:
                 txt = (resp.text or '')
                 if not self._looks_like_rss(txt):
                     continue
-                all_news.extend(self._extract_from_rss_text(txt, cutoff_date))
+                all_news.extend(self._extract_from_rss_text(txt, cutoff_date)[:8])
+                if len(all_news) >= 8:
+                    break
             except Exception:
                 continue
         return all_news
@@ -373,11 +377,11 @@ class BingNewsCrawler:
         today = datetime.now().strftime('%Y-%m-%d')
         out = []
         seen = set()
-        for url in self._build_web_search_candidate_urls():
+        for url in self._build_web_search_candidate_urls()[:self.max_web_candidates]:
             try:
                 resp = requests.get(
                     url,
-                    timeout=self.request_timeout,
+                    timeout=self.supplement_timeout,
                     verify=False,
                     allow_redirects=True,
                     proxies={'http': None, 'https': None}
@@ -413,6 +417,8 @@ class BingNewsCrawler:
                         'source': 'Bing新闻',
                         'summary': txt,
                     })
+                    if len(out) >= 8:
+                        return out
             except Exception:
                 continue
         return out
@@ -774,14 +780,21 @@ class BingNewsCrawler:
                 all_news.extend(selenium_news)
             print("  执行 RSS/HTML 补量...")
             empty_pages = 0
+            web_supplement_done = False
             for page_num in range(1, max_pages + 1):
                 try:
                     page_news = []
                     rss_text = self._fetch_rss_text(page_num)
-                    page_news.extend(self._extract_from_rss_text(rss_text, cutoff_date))
-                    page_news.extend(self._fetch_web_rss_news(cutoff_date))
-                    page_news.extend(self._fetch_web_search_news(cutoff_date))
-                    page_news.extend(self._fetch_html_news(page_num, cutoff_date))
+                    rss_news = self._extract_from_rss_text(rss_text, cutoff_date)
+                    if rss_news:
+                        page_news.extend(rss_news)
+                    if len(page_news) < 3:
+                        page_news.extend(self._fetch_html_news(page_num, cutoff_date))
+                    if not web_supplement_done and (page_num == 1 or len(page_news) < 2):
+                        web_supplement_done = True
+                        page_news.extend(self._fetch_web_rss_news(cutoff_date))
+                        if len(page_news) < 3:
+                            page_news.extend(self._fetch_web_search_news(cutoff_date))
                     if not page_news:
                         empty_pages += 1
                         print(f"  第 {page_num} 页没有新闻")
