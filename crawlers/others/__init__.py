@@ -3,7 +3,8 @@
 其他（默认禁用）新闻爬虫模块
 """
 
-from .bing_news_crawler import BingNewsCrawler
+from .designnews_news_crawler import DesignNewsCrawler
+from .digitimes_news_crawler import DigitimesNewsCrawler
 from .iwencai_news_crawler import IWenCaiNewsCrawler
 from .eechina_news_crawler import EEChinaNewsCrawler
 from .eetchina_news_crawler import EETChinaNewsCrawler
@@ -13,7 +14,8 @@ from .cadence_news_crawler import CadenceNewsCrawler
 from .siemens_news_crawler import SiemensNewsCrawler
 
 __all__ = [
-    'BingNewsCrawler',
+    'DesignNewsCrawler',
+    'DigitimesNewsCrawler',
     'IWenCaiNewsCrawler',
     'EEChinaNewsCrawler',
     'EETChinaNewsCrawler',

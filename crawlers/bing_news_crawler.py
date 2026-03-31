@@ -54,15 +54,28 @@ class BingNewsCrawler:
     # 使用国际版 www.bing.com（cn.bing.com 不支持新闻搜索）
     SEARCH_URL = "https://www.bing.com/news/search"
 
-    def __init__(self, keyword="synopsys"):
-        self.keyword = keyword
+    def __init__(self, keyword="synopsys", keywords=None):
+        self.keywords = self._build_keywords(keywords if keywords else [keyword])
+        self.keyword = self.keywords[0] if self.keywords else keyword
+        self.active_keywords = list(self.keywords)
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'application/rss+xml,application/xml,text/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.7,zh;q=0.6',
             'Referer': 'https://www.bing.com/',
         }
         self.request_timeout = 8
+
+    def _build_keywords(self, keywords):
+        vals = []
+        for k in (keywords or []):
+            s = str(k).strip()
+            if not s:
+                continue
+            if s.lower() in [x.lower() for x in vals]:
+                continue
+            vals.append(s)
+        return vals or ['EDA']
 
     def _find_local_chromedriver(self):
         """查找本地 chromedriver"""
@@ -83,23 +96,25 @@ class BingNewsCrawler:
         candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
         return candidates[0]
 
-    def _is_keyword_relevant(self, title):
-        if not title:
+    def _is_keyword_relevant(self, text):
+        if not text:
             return False
-        keyword = (self.keyword or '').strip().lower()
-        if not keyword:
+        t = (text or '').lower()
+        keywords = [k.strip().lower() for k in (self.active_keywords or [self.keyword]) if str(k).strip()]
+        if not keywords:
             return True
-        title_lower = title.lower()
-        if keyword in title_lower:
-            return True
-        if keyword == 'eda':
+        for k in keywords:
+            if k and k in t:
+                return True
+        if 'eda' in keywords:
             related_tokens = [
                 'synopsys', 'cadence', 'siemens',
                 '电子设计自动化', 'chip design', 'semiconductor design',
                 'ic design', 'verification', 'logic synthesis'
             ]
-            return any(tok in title_lower for tok in related_tokens)
-        return False
+            if any(tok in t for tok in related_tokens):
+                return True
+        return any(k in t for k in ['synopsys', 'cadence', 'siemens'] if k in keywords)
 
     def _parse_bing_pubdate(self, pub_date):
         if not pub_date:
@@ -396,6 +411,7 @@ class BingNewsCrawler:
                         'link': real_link,
                         'date': date,
                         'source': 'Bing新闻',
+                        'summary': txt,
                     })
             except Exception:
                 continue
@@ -464,6 +480,7 @@ class BingNewsCrawler:
                 'link': real_link,
                 'date': date,
                 'source': 'Bing新闻',
+                'summary': parent_text,
             })
         return result
 
@@ -481,6 +498,7 @@ class BingNewsCrawler:
             link = (item.findtext('link') or '').strip()
             pub_date = (item.findtext('pubDate') or '').strip()
             desc = (item.findtext('description') or '').strip()
+            desc_text = BeautifulSoup(desc, 'html.parser').get_text(' ', strip=True)
             date = self._parse_bing_pubdate(pub_date)
             if not title or not link:
                 continue
@@ -500,6 +518,7 @@ class BingNewsCrawler:
                 'link': real_link,
                 'date': date,
                 'source': 'Bing新闻',
+                'summary': desc_text,
             })
         return page_news
 
@@ -620,7 +639,7 @@ class BingNewsCrawler:
                 try:
                     # Bing 新闻搜索 URL，按时间排序，使用英文版
                     first = (page_num - 1) * 10 + 1
-                    url = f"{self.SEARCH_URL}?q={quote(self.keyword)}&qft=sortbydate%3d%221%22&setmkt=en-US&first={first}"
+                    url = f"{self.SEARCH_URL}?q={quote(self.keyword)}&qft=sortbydate%3d%221%22&setmkt=en-US&setlang=en-US&cc=US&ensearch=1&first={first}"
                     
                     driver.get(url)
                     time.sleep(3)  # 等待页面加载
@@ -685,11 +704,16 @@ class BingNewsCrawler:
                         if not self._is_keyword_relevant(title):
                             continue
                         
+                        summary = ''
+                        summary_elem = card.select_one('.snippet, .snippet_text, .news-card-snippet, .body')
+                        if summary_elem:
+                            summary = summary_elem.get_text(' ', strip=True)
                         page_news.append({
                             'title': title,
                             'link': real_link,
                             'date': date,
                             'source': 'Bing新闻',
+                            'summary': summary,
                         })
                     
                     # 方案 2: 标题链接
@@ -711,6 +735,7 @@ class BingNewsCrawler:
                                 'link': real_link,
                                 'date': datetime.now().strftime('%Y-%m-%d'),
                                 'source': 'Bing新闻',
+                                'summary': '',
                             })
                     
                     print(f"  Selenium 第 {page_num} 页: {len(page_news)} 条新闻")
@@ -734,19 +759,21 @@ class BingNewsCrawler:
         
         return all_news
 
-    def crawl(self, max_pages=1, days=7, min_content_length=500):
+    def crawl(self, max_pages=1, days=7, min_content_length=500, keywords=None):
         all_news = []
         cutoff_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
-        print(f"\n正在爬取 Bing 新闻（关键词: {self.keyword}，最近 {days} 天）...")
+        kw_list = self._build_keywords(keywords if keywords else self.keywords)
+        self.active_keywords = kw_list
+        print(f"\n正在爬取 Bing 新闻（关键词: {', '.join(kw_list)}，最近 {days} 天）...")
 
-        # 优先使用 Selenium 爬取动态渲染页面
-        if HAS_SELENIUM:
-            selenium_news = self._crawl_with_selenium(max_pages, cutoff_date)
-            all_news.extend(selenium_news)
-        
-        # 如果 Selenium 没有结果，尝试 RSS/HTML 方式
-        if not all_news:
-            print("  Selenium 未获取到新闻，尝试 RSS/HTML 方式...")
+        for kw in kw_list:
+            self.keyword = kw
+            print(f"  抓取关键词: {kw}")
+            if HAS_SELENIUM:
+                selenium_news = self._crawl_with_selenium(max_pages, cutoff_date)
+                all_news.extend(selenium_news)
+            print("  执行 RSS/HTML 补量...")
+            empty_pages = 0
             for page_num in range(1, max_pages + 1):
                 try:
                     page_news = []
@@ -756,13 +783,17 @@ class BingNewsCrawler:
                     page_news.extend(self._fetch_web_search_news(cutoff_date))
                     page_news.extend(self._fetch_html_news(page_num, cutoff_date))
                     if not page_news:
+                        empty_pages += 1
                         print(f"  第 {page_num} 页没有新闻")
-                        break
+                        if empty_pages >= 2:
+                            break
+                        continue
+                    empty_pages = 0
                     page_count = 0
                     for news in page_news:
                         all_news.append(news)
                         page_count += 1
-                    print(f"  第 {page_num} 页: {page_count} 条新闻")
+                    print(f"  第 {page_num} 页补量: {page_count} 条新闻")
                 except Exception as e:
                     print(f"  第 {page_num} 页出错: {e}")
                     break
@@ -780,6 +811,8 @@ class BingNewsCrawler:
             filtered_news = []
             for news in unique_news:
                 content = self.fetch_news_content(news['link'])
+                if not content:
+                    content = (news.get('summary') or '').strip()
                 content_len = len(content) if content else 0
                 if content_len >= min_content_length:
                     news['content'] = content

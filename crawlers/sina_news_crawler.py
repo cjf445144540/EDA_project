@@ -35,6 +35,59 @@ class SinaNewsCrawler:
             'Referer': 'https://search.sina.com.cn/',
             'Origin': 'https://search.sina.com.cn',
         }
+
+    def _normalize_date(self, y, m, d):
+        try:
+            return f"{int(y):04d}-{int(m):02d}-{int(d):02d}"
+        except Exception:
+            return ''
+
+    def _parse_date_text(self, text):
+        t = (text or '').strip()
+        if not t:
+            return ''
+        now = datetime.now()
+        m = re.search(r'(\d{4})[-/年\.](\d{1,2})[-/月\.](\d{1,2})', t)
+        if m:
+            return self._normalize_date(m.group(1), m.group(2), m.group(3))
+        m = re.search(r'(\d{1,2})[-/月\.](\d{1,2})[日]?', t)
+        if m:
+            return self._normalize_date(now.year, m.group(1), m.group(2))
+        if ('分钟前' in t) or ('小时前' in t) or ('分钟' in t and '前' in t) or ('小时' in t and '前' in t) or ('刚刚' in t) or ('今天' in t):
+            return now.strftime('%Y-%m-%d')
+        if '昨天' in t:
+            return (now - timedelta(days=1)).strftime('%Y-%m-%d')
+        m = re.search(r'(\d+)\s*天前', t)
+        if m:
+            return (now - timedelta(days=int(m.group(1)))).strftime('%Y-%m-%d')
+        return ''
+
+    def _extract_date_from_detail_html(self, html):
+        if not html:
+            return ''
+        soup = BeautifulSoup(html, 'html.parser')
+        candidates = []
+        for sel in [
+            'meta[property="article:published_time"]',
+            'meta[property="og:release_date"]',
+            'meta[name="publishdate"]',
+            'meta[name="pubdate"]',
+            'meta[itemprop="datePublished"]',
+        ]:
+            node = soup.select_one(sel)
+            if node:
+                candidates.append(node.get('content', ''))
+        for sel in ['.date', '.time-source', '.article-time', '.pubtime', '#pub_date']:
+            node = soup.select_one(sel)
+            if node:
+                candidates.append(node.get_text(' ', strip=True))
+        script_text = soup.get_text('\n', strip=True)[:4000]
+        candidates.append(script_text)
+        for c in candidates:
+            d = self._parse_date_text(c)
+            if d:
+                return d
+        return ''
     
     def crawl(self, max_pages=3, days=7, min_content_length=500):
         """
@@ -91,12 +144,12 @@ class SinaNewsCrawler:
                     # 清理标题中的HTML标签（如高亮的<font>标签）
                     title = re.sub(r'<[^>]+>', '', title)
                     
-                    # 获取日期
                     date = ''
-                    date_text = (item.get('dataTime') or item.get('time') or '').strip()
-                    date_match = re.search(r'(\d{4}-\d{2}-\d{2})', date_text)
-                    if date_match:
-                        date = date_match.group(1)
+                    for key in ['dataTime', 'time', 'ctime', 'pubtime', 'pub_time', 'datetime']:
+                        d = self._parse_date_text(item.get(key, ''))
+                        if d:
+                            date = d
+                            break
                     
                     # 日期过滤
                     if date and date < cutoff_date:
@@ -106,8 +159,9 @@ class SinaNewsCrawler:
                     if any(kw in title for kw in skip_keywords):
                         continue
                     
-                    # 获取内容并检查字数
-                    content = self.fetch_news_content(link)
+                    content, detail_date = self.fetch_news_content_and_date(link)
+                    if not date and detail_date:
+                        date = detail_date
                     content_len = len(content) if content else 0
                     
                     # 过滤500字以下的新闻
@@ -143,8 +197,8 @@ class SinaNewsCrawler:
         print(f"  共获取 {len(unique_news)} 条新闻")
         return unique_news
     
-    def fetch_news_content(self, url):
-        """获取新闻详情页的正文内容"""
+    def fetch_news_content_and_date(self, url):
+        """获取新闻详情页的正文内容和日期"""
         for attempt in range(3):
             try:
                 response = requests.get(
@@ -160,9 +214,10 @@ class SinaNewsCrawler:
                 response.encoding = 'utf-8'
                 
                 if response.status_code != 200:
-                    return None
+                    return None, ''
                 
                 soup = BeautifulSoup(response.text, 'html.parser')
+                detail_date = self._extract_date_from_detail_html(response.text)
                 
                 # 新浪新闻详情页的正文选择器（多种可能）
                 selectors = [
@@ -187,20 +242,24 @@ class SinaNewsCrawler:
                         if paragraphs:
                             content = '\n'.join([p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True) and len(p.get_text(strip=True)) > 10])
                             if content and len(content) > 100:
-                                return content
+                                return content, detail_date
                         
                         # 直接获取文本
                         text = content_elem.get_text(separator='\n', strip=True)
                         if text and len(text) > 100:
-                            return text
+                            return text, detail_date
                 
-                return None
+                return None, detail_date
                 
             except Exception:
                 if attempt < 2:
                     time.sleep(1)
                     continue
-                return None
+                return None, ''
+
+    def fetch_news_content(self, url):
+        content, _ = self.fetch_news_content_and_date(url)
+        return content
     
     def save_to_json(self, news_list, filename='sina_news.json'):
         """保存新闻到 JSON 文件"""

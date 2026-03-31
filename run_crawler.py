@@ -65,10 +65,11 @@ EASTMONEY_CONFIG = {
 # Bing 新闻配置
 BING_CONFIG = {
     'enabled': False,  # 是否启用
-    'max_pages': DEFAULT_MAX_PAGES,
+    'max_pages': 3,
     'days': DEFAULT_DAYS,
-    'min_content_length': DEFAULT_MIN_CONTENT_LENGTH,
-    'keyword': 'EDA',  # 使用 EDA 关键词获取更多新闻
+    'min_content_length': 100,
+    'keywords': ['EDA', 'synopsys', 'cadence', 'siemens'],
+    'keyword': 'EDA',
 }
 
 # design news 新闻配置（已禁用：网站被Cloudflare阻止，无法获取内容）
@@ -1071,11 +1072,18 @@ def run_bing_crawler(config):
     max_pages = config.get('max_pages', 1)
     days = config.get('days', 7)
     min_content_length = config.get('min_content_length', 0)
-    keyword = config.get('keyword', 'EDA')
+    keywords = config.get('keywords', [])
+    if not keywords:
+        keywords = [config.get('keyword', 'EDA')]
 
     try:
-        crawler = BingNewsCrawler(keyword=keyword)
-        news_list = crawler.crawl(max_pages=max_pages, days=days, min_content_length=min_content_length)
+        crawler = BingNewsCrawler(keyword=keywords[0], keywords=keywords)
+        news_list = crawler.crawl(
+            max_pages=max_pages,
+            days=days,
+            min_content_length=min_content_length,
+            keywords=keywords
+        )
         crawler.save_to_json(news_list)
 
         result = {}
@@ -1086,7 +1094,7 @@ def run_bing_crawler(config):
                 'news': news_list
             }
 
-        print(f"[OK] Bing新闻 爬取完成，获取 {len(news_list)} 条新闻（最近{days}天）")
+        print(f"[OK] Bing新闻 爬取完成，获取 {len(news_list)} 条新闻（最近{days}天，关键词: {', '.join(keywords)}）")
         return result
     except Exception as e:
         print(f"[ERR] Bing新闻 爬取失败: {e}")
