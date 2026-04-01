@@ -10,6 +10,8 @@ import re
 import time
 import logging
 import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from glob import glob
 import requests
 import urllib3
@@ -67,6 +69,8 @@ class BingNewsCrawler:
         self.request_timeout = 6
         self.supplement_timeout = 4
         self.max_web_candidates = 3
+        self.content_fetch_timeout = 10
+        self.content_fetch_workers = 6
 
     def _build_keywords(self, keywords):
         vals = []
@@ -107,6 +111,18 @@ class BingNewsCrawler:
             return True
         for k in keywords:
             if k and k in t:
+                if k == 'cadence':
+                    eda_ctx = ['eda', 'chip', 'semiconductor', 'electronic', 'verification', 'design', 'synopsys', 'siemens']
+                    if not any(x in t for x in eda_ctx):
+                        continue
+                if k == 'siemens':
+                    eda_ctx = ['eda', 'chip', 'semiconductor', 'electronic', 'verification', 'design', 'software', 'manufacturing', 'synopsys']
+                    if not any(x in t for x in eda_ctx):
+                        continue
+                if k == 'eda':
+                    bad_ctx = ['economic development administration', 'u.s. economic development administration', 'brooklyn center eda']
+                    if any(x in t for x in bad_ctx):
+                        continue
                 return True
         if 'eda' in keywords:
             related_tokens = [
@@ -353,8 +369,16 @@ class BingNewsCrawler:
         return ''
 
     def _fetch_web_rss_news(self, cutoff_date):
+        return self._fetch_web_rss_news_with_progress(cutoff_date, stage='运行')
+
+    def _emit_supplement_progress(self, msg):
+        print(f"    [Bing RSS补量] {msg}")
+
+    def _fetch_web_rss_news_with_progress(self, cutoff_date, stage='运行'):
         all_news = []
-        for url in self._build_web_rss_candidate_urls()[:self.max_web_candidates]:
+        urls = self._build_web_rss_candidate_urls()[:self.max_web_candidates]
+        self._emit_supplement_progress(f"{stage} RSS 开始，候选 {len(urls)}")
+        for idx, url in enumerate(urls, 1):
             try:
                 resp = requests.get(
                     url,
@@ -365,19 +389,29 @@ class BingNewsCrawler:
                 )
                 txt = (resp.text or '')
                 if not self._looks_like_rss(txt):
+                    self._emit_supplement_progress(f"{stage} RSS {idx}/{len(urls)} 非RSS")
                     continue
-                all_news.extend(self._extract_from_rss_text(txt, cutoff_date)[:8])
+                got = self._extract_from_rss_text(txt, cutoff_date)[:8]
+                all_news.extend(got)
+                self._emit_supplement_progress(f"{stage} RSS {idx}/{len(urls)} 命中 {len(got)}，累计 {len(all_news)}")
                 if len(all_news) >= 8:
                     break
             except Exception:
+                self._emit_supplement_progress(f"{stage} RSS {idx}/{len(urls)} 失败")
                 continue
+        self._emit_supplement_progress(f"{stage} RSS 完成，累计 {len(all_news)}")
         return all_news
 
     def _fetch_web_search_news(self, cutoff_date):
+        return self._fetch_web_search_news_with_progress(cutoff_date, stage='运行')
+
+    def _fetch_web_search_news_with_progress(self, cutoff_date, stage='运行'):
         today = datetime.now().strftime('%Y-%m-%d')
         out = []
         seen = set()
-        for url in self._build_web_search_candidate_urls()[:self.max_web_candidates]:
+        urls = self._build_web_search_candidate_urls()[:self.max_web_candidates]
+        self._emit_supplement_progress(f"{stage} Web搜索 开始，候选 {len(urls)}")
+        for idx, url in enumerate(urls, 1):
             try:
                 resp = requests.get(
                     url,
@@ -387,8 +421,10 @@ class BingNewsCrawler:
                     proxies={'http': None, 'https': None}
                 )
                 if resp.status_code != 200:
+                    self._emit_supplement_progress(f"{stage} Web搜索 {idx}/{len(urls)} 状态码 {resp.status_code}")
                     continue
                 soup = BeautifulSoup(resp.text, 'html.parser')
+                before = len(out)
                 for a in soup.select('li.b_algo h2 a[href]'):
                     title = a.get_text(' ', strip=True)
                     link = (a.get('href') or '').strip()
@@ -418,9 +454,37 @@ class BingNewsCrawler:
                         'summary': txt,
                     })
                     if len(out) >= 8:
+                        self._emit_supplement_progress(f"{stage} Web搜索 {idx}/{len(urls)} 新增 {len(out)-before}，累计 {len(out)}")
                         return out
+                self._emit_supplement_progress(f"{stage} Web搜索 {idx}/{len(urls)} 新增 {len(out)-before}，累计 {len(out)}")
             except Exception:
+                self._emit_supplement_progress(f"{stage} Web搜索 {idx}/{len(urls)} 失败")
                 continue
+        self._emit_supplement_progress(f"{stage} Web搜索 完成，累计 {len(out)}")
+        return out
+
+    def _build_web_supplement_for_keyword(self, kw, cutoff_date):
+        old = self.keyword
+        self.keyword = kw
+        items = []
+        try:
+            stage = f"预热[{kw}]"
+            items.extend(self._fetch_web_rss_news_with_progress(cutoff_date, stage=stage))
+            if len(items) < 3:
+                items.extend(self._fetch_web_search_news_with_progress(cutoff_date, stage=stage))
+            return items
+        finally:
+            self.keyword = old
+
+    def prewarm_web_supplement(self, keywords, days):
+        cutoff_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+        out = {}
+        kws = self._build_keywords(keywords)
+        self._emit_supplement_progress(f"预热启动，关键词 {', '.join(kws)}")
+        for kw in kws:
+            out[kw] = self._build_web_supplement_for_keyword(kw, cutoff_date)
+            self._emit_supplement_progress(f"预热[{kw}] 完成，条数 {len(out[kw])}")
+        self._emit_supplement_progress("预热全部完成")
         return out
 
     def _fetch_html_news(self, page_num, cutoff_date):
@@ -765,7 +829,7 @@ class BingNewsCrawler:
         
         return all_news
 
-    def crawl(self, max_pages=1, days=7, min_content_length=500, keywords=None):
+    def crawl(self, max_pages=1, days=7, min_content_length=500, keywords=None, prewarmed_web_supplement=None):
         all_news = []
         cutoff_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
         kw_list = self._build_keywords(keywords if keywords else self.keywords)
@@ -775,12 +839,36 @@ class BingNewsCrawler:
         for kw in kw_list:
             self.keyword = kw
             print(f"  抓取关键词: {kw}")
+            web_supplement_news = []
+            web_supplement_done = threading.Event()
+            prewarm_items = (prewarmed_web_supplement or {}).get(kw, [])
+            web_supplement_thread = None
+            if prewarm_items:
+                web_supplement_news.extend(prewarm_items)
+                web_supplement_done.set()
+
+            def run_web_supplement():
+                items = []
+                try:
+                    stage = f"运行[{kw}]"
+                    items.extend(self._fetch_web_rss_news_with_progress(cutoff_date, stage=stage))
+                    if len(items) < 3:
+                        items.extend(self._fetch_web_search_news_with_progress(cutoff_date, stage=stage))
+                except Exception:
+                    pass
+                web_supplement_news.extend(items)
+                web_supplement_done.set()
+
+            if not web_supplement_done.is_set():
+                web_supplement_thread = threading.Thread(target=run_web_supplement, daemon=True)
+                web_supplement_thread.start()
+
             if HAS_SELENIUM:
                 selenium_news = self._crawl_with_selenium(max_pages, cutoff_date)
                 all_news.extend(selenium_news)
             print("  执行 RSS/HTML 补量...")
             empty_pages = 0
-            web_supplement_done = False
+            web_supplement_merged = False
             for page_num in range(1, max_pages + 1):
                 try:
                     page_news = []
@@ -790,11 +878,9 @@ class BingNewsCrawler:
                         page_news.extend(rss_news)
                     if len(page_news) < 3:
                         page_news.extend(self._fetch_html_news(page_num, cutoff_date))
-                    if not web_supplement_done and (page_num == 1 or len(page_news) < 2):
-                        web_supplement_done = True
-                        page_news.extend(self._fetch_web_rss_news(cutoff_date))
-                        if len(page_news) < 3:
-                            page_news.extend(self._fetch_web_search_news(cutoff_date))
+                    if (not web_supplement_merged) and web_supplement_done.is_set():
+                        page_news.extend(web_supplement_news)
+                        web_supplement_merged = True
                     if not page_news:
                         empty_pages += 1
                         print(f"  第 {page_num} 页没有新闻")
@@ -810,6 +896,10 @@ class BingNewsCrawler:
                 except Exception as e:
                     print(f"  第 {page_num} 页出错: {e}")
                     break
+            if web_supplement_thread and (not web_supplement_done.is_set()):
+                web_supplement_thread.join(timeout=0.5)
+            if (not web_supplement_merged) and web_supplement_done.is_set():
+                all_news.extend(web_supplement_news)
 
         unique_news = []
         seen_links = set()
@@ -821,22 +911,74 @@ class BingNewsCrawler:
 
         if min_content_length > 0 and unique_news:
             print(f"  正在获取新闻内容并过滤（>={min_content_length}字）...")
-            filtered_news = []
-            for news in unique_news:
-                content = self.fetch_news_content(news['link'])
-                if not content:
-                    content = (news.get('summary') or '').strip()
-                content_len = len(content) if content else 0
-                if content_len >= min_content_length:
-                    news['content'] = content
-                    filtered_news.append(news)
+            filtered_news = self._filter_news_by_content(unique_news, min_content_length)
             unique_news = filtered_news
 
         print(f"  共获取 {len(unique_news)} 条新闻")
         return unique_news
 
-    def fetch_news_content(self, url):
-        for attempt in range(2):
+    def _filter_news_by_content(self, news_list, min_content_length):
+        total = len(news_list)
+        passed = []
+        progress = {'done': 0, 'kept': 0}
+
+        def process_one(news):
+            summary = (news.get('summary') or '').strip()
+            content = self.fetch_news_content(news.get('link', ''), news.get('title', ''))
+            if not content and self._summary_fallback_ok(news.get('title', ''), summary):
+                content = summary
+            if content and len(content) >= min_content_length:
+                item = dict(news)
+                item['content'] = content
+                return item
+            return None
+
+        with ThreadPoolExecutor(max_workers=self.content_fetch_workers) as executor:
+            futures = [executor.submit(process_one, n) for n in news_list]
+            for future in as_completed(futures):
+                progress['done'] += 1
+                try:
+                    item = future.result()
+                except Exception:
+                    item = None
+                if item:
+                    passed.append(item)
+                    progress['kept'] += 1
+                if progress['done'] % 5 == 0 or progress['done'] == total:
+                    print(f"    [Bing内容] {progress['done']}/{total}，保留 {progress['kept']}")
+        return passed
+
+    def _clean_content_text(self, text):
+        if not text:
+            return ''
+        lines = [x.strip() for x in text.splitlines() if x and x.strip()]
+        lines = [x for x in lines if len(x) > 8]
+        return '\n'.join(lines)
+
+    def _title_overlap_ok(self, title, content):
+        t = (title or '').lower()
+        c = (content or '').lower()
+        if not t or not c:
+            return True
+        tokens = [x for x in re.split(r'[^a-z0-9\u4e00-\u9fff]+', t) if len(x) >= 3]
+        if not tokens:
+            return True
+        tokens = tokens[:8]
+        hit = sum(1 for x in tokens if x in c)
+        return hit >= 1
+
+    def _summary_fallback_ok(self, title, summary):
+        s = (summary or '').strip()
+        if len(s) < 60:
+            return False
+        if not self._title_overlap_ok(title, s):
+            return False
+        if not self._is_keyword_relevant(s):
+            return False
+        return True
+
+    def fetch_news_content(self, url, expected_title=''):
+        for attempt in range(1):
             try:
                 resp = requests.get(
                     url,
@@ -845,7 +987,7 @@ class BingNewsCrawler:
                         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                         'Accept-Language': self.headers['Accept-Language'],
                     },
-                    timeout=15,
+                    timeout=self.content_fetch_timeout,
                     verify=False,
                     proxies={'http': None, 'https': None}
                 )
@@ -853,28 +995,50 @@ class BingNewsCrawler:
                     continue
                 resp.encoding = resp.apparent_encoding or 'utf-8'
                 soup = BeautifulSoup(resp.text, 'html.parser')
+                for tag in soup.find_all(['script', 'style', 'nav', 'aside', 'header', 'footer', 'iframe', 'form']):
+                    tag.decompose()
                 selectors = [
                     'article',
+                    'main',
                     '.article-content',
                     '.entry-content',
                     '.post-content',
                     '.news-content',
+                    '[itemprop="articleBody"]',
+                    '.story-body',
+                    '.article__content',
                     '.content',
-                    'main',
                 ]
+                best = ''
+                best_score = -1
                 for selector in selectors:
                     content_elem = soup.select_one(selector)
                     if not content_elem:
                         continue
-                    for tag in content_elem.find_all(['script', 'style', 'nav', 'aside', 'header', 'footer', 'iframe']):
+                    for tag in content_elem.find_all(['script', 'style', 'nav', 'aside', 'header', 'footer', 'iframe', 'form']):
                         tag.decompose()
                     paragraphs = content_elem.find_all('p')
                     if paragraphs:
-                        content = '\n'.join([p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True) and len(p.get_text(strip=True)) > 10])
+                        content = '\n'.join([p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True) and len(p.get_text(strip=True)) > 20])
                     else:
                         content = content_elem.get_text(separator='\n', strip=True)
-                    if content and len(content) > 100:
-                        return content
+                    content = self._clean_content_text(content)
+                    if not content or len(content) < 120:
+                        continue
+                    if not self._title_overlap_ok(expected_title, content):
+                        continue
+                    score = len(content) + min(1200, len(paragraphs) * 120)
+                    if score > best_score:
+                        best_score = score
+                        best = content
+                if best:
+                    return best
+                all_paras = [p.get_text(strip=True) for p in soup.find_all('p')]
+                all_paras = [x for x in all_paras if len(x) > 30]
+                if all_paras:
+                    merged = self._clean_content_text('\n'.join(all_paras[:120]))
+                    if len(merged) > 200 and self._title_overlap_ok(expected_title, merged):
+                        return merged
                 return ''
             except Exception:
                 continue

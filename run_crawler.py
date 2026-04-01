@@ -64,12 +64,11 @@ EASTMONEY_CONFIG = {
 
 # Bing 新闻配置
 BING_CONFIG = {
-    'enabled': False,  # 是否启用
-    'max_pages': 3,
+    'enabled': True,  # 是否启用
+    'max_pages': DEFAULT_MAX_PAGES,
     'days': DEFAULT_DAYS,
     'min_content_length': 100,
-    'keywords': ['EDA', 'synopsys', 'cadence', 'siemens'],
-    'keyword': 'EDA',
+    'keywords': ['EDA', 'synopsys'],
 }
 
 # design news 新闻配置（已禁用：网站被Cloudflare阻止，无法获取内容）
@@ -364,9 +363,43 @@ from crawlers import THSNewsCrawler, SemitronixNewsCrawler, PrimariusNewsCrawler
 from classify_news import NewsClassifier
 from auto_news_writer import get_first_news_link, fetch_news_content, copy_to_clipboard
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 import pyperclip
 import json
 from datetime import datetime, timedelta
+
+BING_PREWARM_LOCK = threading.Lock()
+BING_PREWARM_THREAD = None
+BING_PREWARM_DATA = {}
+
+def _start_bing_prewarm():
+    global BING_PREWARM_THREAD, BING_PREWARM_DATA
+    if not BING_CONFIG.get('enabled', False):
+        return
+    keywords = BING_CONFIG.get('keywords', [])
+    if not keywords:
+        keywords = [BING_CONFIG.get('keyword', 'EDA')]
+    days = BING_CONFIG.get('days', 7)
+
+    def worker():
+        global BING_PREWARM_DATA
+        try:
+            print("[Bing预热] 已启动 RSS/HTML 补量预热线程")
+            crawler = BingNewsCrawler(keyword=keywords[0], keywords=keywords)
+            data = crawler.prewarm_web_supplement(keywords, days)
+            with BING_PREWARM_LOCK:
+                BING_PREWARM_DATA = data
+            total = sum(len(v) for v in data.values()) if isinstance(data, dict) else 0
+            print(f"[Bing预热] 预热完成，缓存 {total} 条")
+        except Exception:
+            with BING_PREWARM_LOCK:
+                BING_PREWARM_DATA = {}
+            print("[Bing预热] 预热失败，已回退为空缓存")
+
+    t = threading.Thread(target=worker, name="BingPrewarm", daemon=True)
+    with BING_PREWARM_LOCK:
+        BING_PREWARM_THREAD = t
+    t.start()
 
 
 # ========================================
@@ -1077,12 +1110,21 @@ def run_bing_crawler(config):
         keywords = [config.get('keyword', 'EDA')]
 
     try:
+        prewarmed = {}
+        with BING_PREWARM_LOCK:
+            t = BING_PREWARM_THREAD
+        if t and t.is_alive():
+            t.join(timeout=0.6)
+        with BING_PREWARM_LOCK:
+            if BING_PREWARM_DATA:
+                prewarmed = dict(BING_PREWARM_DATA)
         crawler = BingNewsCrawler(keyword=keywords[0], keywords=keywords)
         news_list = crawler.crawl(
             max_pages=max_pages,
             days=days,
             min_content_length=min_content_length,
-            keywords=keywords
+            keywords=keywords,
+            prewarmed_web_supplement=prewarmed
         )
         crawler.save_to_json(news_list)
 
@@ -1527,6 +1569,7 @@ def main():
     log("\n" + "#"*60)
     log("#" + " "*20 + "统一新闻爬取系统" + " "*19 + "#")
     log("#"*60)
+    _start_bing_prewarm()
     
     # ======== 清理旧的输出文件 ========
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1957,15 +2000,16 @@ def main():
             source_name = item['source']
             news = item['news']
             try:
+                source_min_len = 100 if source_name == "Bing新闻" else 200
                 cached_content = news.get('content', '')
-                if cached_content and len(cached_content) >= 200:
+                if cached_content and len(cached_content) >= source_min_len:
                     return {**item, 'content': cached_content, 'content_len': len(cached_content)}
                 link = news.get('link', '')
                 if link:
                     with cache_lock:
                         cached_by_link = content_cache.get(link, '')
                     cache_bypass_sources = {"合见工软官网", "广立微官网", "概伦电子官网"}
-                    if source_name not in cache_bypass_sources and cached_by_link and len(cached_by_link) >= 200:
+                    if source_name not in cache_bypass_sources and cached_by_link and len(cached_by_link) >= source_min_len:
                         return {**item, 'content': cached_by_link, 'content_len': len(cached_by_link)}
                 if source_name == "芯华章官网":
                     content = xepic_crawler.fetch_news_content(news['link'])
@@ -2000,7 +2044,9 @@ def main():
                 elif source_name == "搜狐网":
                     content = sohu_crawler.fetch_news_content(news['link'])
                 elif source_name == "Bing新闻":
-                    content = bing_crawler.fetch_news_content(news['link'])
+                    content = bing_crawler.fetch_news_content(news['link'], news.get('title', ''))
+                    if not content and cached_content:
+                        content = cached_content
                 elif source_name == "问财网":
                     content = iwencai_crawler.fetch_news_content(news['link'])
                 elif source_name == "集微网":
@@ -2014,7 +2060,7 @@ def main():
                 else:
                     content = fetch_news_content(news['link'])
                 content_len = len(content) if content else 0
-                if link and content_len >= 200:
+                if link and content_len >= source_min_len:
                     with cache_lock:
                         content_cache[link] = content
                 return {**item, 'content': content, 'content_len': content_len}
@@ -2360,8 +2406,9 @@ def main():
             source_name = item['source']
             content_len = item['content_len']
             
-            # Selenium来源放宽字数限制（50字），其他来源200字
             min_len = 200
+            if source_name == "Bing新闻":
+                min_len = 100
             if content_len < min_len:
                 continue
             
