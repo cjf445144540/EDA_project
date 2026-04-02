@@ -64,7 +64,7 @@ EASTMONEY_CONFIG = {
 
 # Bing 新闻配置
 BING_CONFIG = {
-    'enabled': True,  # 是否启用
+    'enabled': False,  # 是否启用
     'max_pages': DEFAULT_MAX_PAGES,
     'days': DEFAULT_DAYS,
     'min_content_length': 100,

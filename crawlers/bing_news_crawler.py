@@ -120,8 +120,22 @@ class BingNewsCrawler:
                     if not any(x in t for x in eda_ctx):
                         continue
                 if k == 'eda':
-                    bad_ctx = ['economic development administration', 'u.s. economic development administration', 'brooklyn center eda']
+                    # 排除不相关的 EDA 含义
+                    bad_ctx = [
+                        'economic development administration', 'u.s. economic development administration', 
+                        'brooklyn center eda', 'exploratory data analysis',
+                        # 排除日本导演 Hirokazu Kore-eda 相关内容
+                        'kore-eda', 'koreeda', 'hirokazu', 'shoplifters', 'broker', 'monster', 'protégé',
+                        'love triangle', 'romantic drama', 'polyamorous', 'two lovers'
+                    ]
                     if any(x in t for x in bad_ctx):
+                        continue
+                    # 检查 EDA 是否作为独立词出现（而不是名字的一部分）
+                    # 如果周围有 EDA 行业相关词，则认为是相关的
+                    eda_industry_ctx = ['chip', 'semiconductor', 'electronic', 'verification', 'design', 
+                                        'synopsys', 'cadence', 'siemens', 'ic', 'asic', 'fpga', 'synthesis',
+                                        'simulation', 'software', 'tool', 'ai', 'machine learning']
+                    if not any(x in t for x in eda_industry_ctx):
                         continue
                 return True
         if 'eda' in keywords:
@@ -968,80 +982,178 @@ class BingNewsCrawler:
         return hit >= 1
 
     def _summary_fallback_ok(self, title, summary):
+        """检查是否可以使用 summary 作为内容回退"""
         s = (summary or '').strip()
-        if len(s) < 60:
+        # 放宽长度要求：至少 50 字即可
+        if len(s) < 50:
             return False
+        # 检查标题是否与 summary 有重叠
         if not self._title_overlap_ok(title, s):
             return False
-        if not self._is_keyword_relevant(s):
-            return False
+        # 不再检查关键词相关性，因为新闻已经是从搜索结果来的
         return True
 
     def fetch_news_content(self, url, expected_title=''):
-        for attempt in range(1):
-            try:
-                resp = requests.get(
-                    url,
-                    headers={
-                        'User-Agent': self.headers['User-Agent'],
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                        'Accept-Language': self.headers['Accept-Language'],
-                    },
-                    timeout=self.content_fetch_timeout,
-                    verify=False,
-                    proxies={'http': None, 'https': None}
-                )
-                if resp.status_code != 200:
-                    continue
-                resp.encoding = resp.apparent_encoding or 'utf-8'
-                soup = BeautifulSoup(resp.text, 'html.parser')
-                for tag in soup.find_all(['script', 'style', 'nav', 'aside', 'header', 'footer', 'iframe', 'form']):
-                    tag.decompose()
-                selectors = [
-                    'article',
-                    'main',
-                    '.article-content',
-                    '.entry-content',
-                    '.post-content',
-                    '.news-content',
-                    '[itemprop="articleBody"]',
-                    '.story-body',
-                    '.article__content',
-                    '.content',
-                ]
-                best = ''
-                best_score = -1
-                for selector in selectors:
-                    content_elem = soup.select_one(selector)
-                    if not content_elem:
-                        continue
-                    for tag in content_elem.find_all(['script', 'style', 'nav', 'aside', 'header', 'footer', 'iframe', 'form']):
-                        tag.decompose()
-                    paragraphs = content_elem.find_all('p')
-                    if paragraphs:
-                        content = '\n'.join([p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True) and len(p.get_text(strip=True)) > 20])
-                    else:
-                        content = content_elem.get_text(separator='\n', strip=True)
-                    content = self._clean_content_text(content)
-                    if not content or len(content) < 120:
-                        continue
-                    if not self._title_overlap_ok(expected_title, content):
-                        continue
-                    score = len(content) + min(1200, len(paragraphs) * 120)
-                    if score > best_score:
-                        best_score = score
-                        best = content
-                if best:
-                    return best
-                all_paras = [p.get_text(strip=True) for p in soup.find_all('p')]
-                all_paras = [x for x in all_paras if len(x) > 30]
-                if all_paras:
-                    merged = self._clean_content_text('\n'.join(all_paras[:120]))
-                    if len(merged) > 200 and self._title_overlap_ok(expected_title, merged):
-                        return merged
-                return ''
-            except Exception:
+        """获取新闻正文内容，依次尝试：直接访问 -> 代理访问 -> Jina Reader API"""
+        if not url:
+            return ''
+        
+        # 方法1: 直接访问
+        content = self._fetch_content_direct(url, expected_title)
+        if content and len(content) >= 200:
+            return content
+        
+        # 方法2: 使用本地代理访问
+        content = self._fetch_content_with_proxy(url, expected_title)
+        if content and len(content) >= 200:
+            return content
+        
+        # 方法3: 使用 Jina Reader API
+        content = self._fetch_content_via_jina(url, expected_title)
+        if content and len(content) >= 200:
+            return content
+        
+        return ''
+    
+    def _fetch_content_direct(self, url, expected_title=''):
+        """直接访问获取内容"""
+        try:
+            resp = requests.get(
+                url,
+                headers={
+                    'User-Agent': self.headers['User-Agent'],
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': self.headers['Accept-Language'],
+                },
+                timeout=8,
+                verify=False,
+                proxies={'http': None, 'https': None}
+            )
+            if resp.status_code == 200:
+                return self._extract_content_from_html(resp.text, expected_title)
+        except Exception:
+            pass
+        return ''
+    
+    def _fetch_content_with_proxy(self, url, expected_title=''):
+        """使用本地代理访问获取内容"""
+        proxy = 'http://127.0.0.1:7890'
+        try:
+            resp = requests.get(
+                url,
+                headers={
+                    'User-Agent': self.headers['User-Agent'],
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': self.headers['Accept-Language'],
+                },
+                timeout=12,
+                verify=False,
+                proxies={'http': proxy, 'https': proxy}
+            )
+            if resp.status_code == 200:
+                return self._extract_content_from_html(resp.text, expected_title)
+        except Exception:
+            pass
+        return ''
+    
+    def _fetch_content_via_jina(self, url, expected_title=''):
+        """使用 Jina Reader API 获取内容"""
+        jina_url = f'https://r.jina.ai/{url}'
+        try:
+            resp = requests.get(
+                jina_url,
+                headers={
+                    'User-Agent': self.headers['User-Agent'],
+                    'Accept': 'text/plain',
+                },
+                timeout=15,
+                verify=False
+            )
+            if resp.status_code == 200 and resp.text:
+                # Jina 返回 Markdown 格式，提取正文
+                content = self._extract_content_from_jina_markdown(resp.text, expected_title)
+                if content:
+                    return content
+        except Exception:
+            pass
+        return ''
+    
+    def _extract_content_from_jina_markdown(self, md_text, expected_title=''):
+        """从 Jina Reader 返回的 Markdown 中提取正文"""
+        if not md_text:
+            return ''
+        lines = md_text.splitlines()
+        out = []
+        for line in lines:
+            line = line.strip()
+            if not line or len(line) < 50:
                 continue
+            # 跳过链接、图片、导航等
+            if line.startswith('![') or line.startswith('['):
+                continue
+            if 'http://' in line or 'https://' in line:
+                continue
+            if line.startswith('*   [') or line.startswith('-   ['):
+                continue
+            # 跳过页面元信息
+            if any(x in line.lower() for x in ['cookie', 'privacy', 'subscribe', 'newsletter', 'copyright', 'all rights reserved']):
+                continue
+            out.append(line)
+            if len(out) >= 50:
+                break
+        content = '\n'.join(out)
+        if content and self._title_overlap_ok(expected_title, content):
+            return content
+        return ''
+    
+    def _extract_content_from_html(self, html_text, expected_title=''):
+        """从 HTML 中提取正文内容"""
+        soup = BeautifulSoup(html_text, 'html.parser')
+        for tag in soup.find_all(['script', 'style', 'nav', 'aside', 'header', 'footer', 'iframe', 'form']):
+            tag.decompose()
+        selectors = [
+            'article',
+            'main',
+            '.article-content',
+            '.entry-content',
+            '.post-content',
+            '.news-content',
+            '[itemprop="articleBody"]',
+            '.story-body',
+            '.article__content',
+            '.content',
+        ]
+        best = ''
+        best_score = -1
+        for selector in selectors:
+            content_elem = soup.select_one(selector)
+            if not content_elem:
+                continue
+            for tag in content_elem.find_all(['script', 'style', 'nav', 'aside', 'header', 'footer', 'iframe', 'form']):
+                tag.decompose()
+            paragraphs = content_elem.find_all('p')
+            if paragraphs:
+                content = '\n'.join([p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True) and len(p.get_text(strip=True)) > 20])
+            else:
+                content = content_elem.get_text(separator='\n', strip=True)
+            content = self._clean_content_text(content)
+            if not content or len(content) < 120:
+                continue
+            if not self._title_overlap_ok(expected_title, content):
+                continue
+            score = len(content) + min(1200, len(paragraphs) * 120)
+            if score > best_score:
+                best_score = score
+                best = content
+        if best:
+            return best
+        # 尝试所有 p 标签
+        all_paras = [p.get_text(strip=True) for p in soup.find_all('p')]
+        all_paras = [x for x in all_paras if len(x) > 30]
+        if all_paras:
+            merged = self._clean_content_text('\n'.join(all_paras[:120]))
+            if len(merged) > 200 and self._title_overlap_ok(expected_title, merged):
+                return merged
         return ''
 
     def save_to_json(self, news_list, filename='bing_news.json'):
